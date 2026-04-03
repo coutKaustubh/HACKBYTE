@@ -1,0 +1,21 @@
+{
+  "allow": [
+    "restart_service",
+    "edit_config",
+    "rollback_deploy",
+    "read_logs",
+    "read_file"
+  ],
+  "deny": [
+    "drop_table",
+    "delete_database",
+    "exec_arbitrary",
+    "rm_rf"
+  ],
+  "deny_rules": {
+    "drop_table": ["P-001", "Destructive irreversible operation denied in production"],
+    "delete_database": ["P-002", "Database deletion requires manual approval — not autonomous"],
+    "exec_arbitrary": ["P-003", "Arbitrary command execution outside approved action set"],
+    "rm_rf": ["P-004", "Filesystem deletion is permanently blocked"]
+  }
+}
