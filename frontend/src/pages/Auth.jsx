@@ -1,9 +1,17 @@
 import { useNavigate } from 'react-router-dom'
+import ClickSpark from './ClickSpark'; 
 
 export default function Auth() {
   const navigate = useNavigate()
 
   return (
+    <ClickSpark
+  sparkColor='blue'
+  sparkSize={10}
+  sparkRadius={15}
+  sparkCount={8}
+  duration={400}
+>
     <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
       <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#E5E5E5] p-8 rounded-lg shadow-xl">
         <div className="text-center mb-8">
@@ -37,5 +45,6 @@ export default function Auth() {
         </div>
       </div>
     </div>
+    </ClickSpark>
   )
 }
