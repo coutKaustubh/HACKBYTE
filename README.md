@@ -1,4 +1,4 @@
-# 🌌 Patchify
+# 🌌 XOne
 
 > **A Production-Grade AI-Driven Infrastructure Auto-Remediation System**
 
@@ -6,9 +6,9 @@
 
 ## 📖 Overview
 
-**Patchify** is an intelligent, self-healing infrastructure system designed to monitor, detect, and automatically resolve server and application errors in real-time. 
+**XOne** is an intelligent, self-healing infrastructure system designed to monitor, detect, and automatically resolve server and application errors in real-time. 
 
-Unlike traditional AI pipelines that blindly execute generated scripts, Patchify implements **The Reality Filter** (via OPEN CLAW / armoriq)—a rigorous secondary safety net ensuring that AI-proposed solutions are technically sound, strictly relevant, and entirely non-destructive.
+Unlike traditional AI pipelines that blindly execute generated scripts, XOne implements **The Reality Filter** (via OPEN CLAW / armoriq)—a rigorous secondary safety net ensuring that AI-proposed solutions are technically sound, strictly relevant, and entirely non-destructive.
 
 ---
 
