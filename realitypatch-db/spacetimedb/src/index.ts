@@ -46,6 +46,17 @@ const safety_check = table(
   }
 );
 
+const agent_event = table(
+  { name: "agent_event", public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    incident_id: t.string(),
+    event_type: t.string(),
+    payload: t.string(),
+    timestamp: t.timestamp(),
+  }
+);
+
 // ======================
 // SCHEMA
 // ======================
@@ -55,6 +66,7 @@ const spacetimedb = schema({
   execution,
   ai_decision,
   safety_check,
+  agent_event,
 });
 
 export default spacetimedb;
@@ -136,6 +148,24 @@ export const resolve_incident = spacetimedb.reducer(
     ctx.db.incident.id.update({
       ...inc,
       status: "resolved",
+    });
+  }
+);
+
+// Emit Event for Agent Graph
+export const emit_event = spacetimedb.reducer(
+  {
+    incident_id: t.string(),
+    event_type: t.string(),
+    payload: t.string(),
+  },
+  (ctx, { incident_id, event_type, payload }) => {
+    ctx.db.agent_event.insert({
+      id: 0n,
+      incident_id,
+      event_type,
+      payload,
+      timestamp: ctx.timestamp,
     });
   }
 );
