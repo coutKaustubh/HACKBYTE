@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+langgraph
+langchain-core
+google-generativeai
+paramiko
+python-dotenv
+pydantic
+httpx
+websockets
