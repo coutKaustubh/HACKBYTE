@@ -30,4 +30,7 @@ urlpatterns = [
     path("api/auth/google/callback/", GoogleCallbackView.as_view()),
     path("api/auth/github/login/", GithubLoginView.as_view()),
     path("api/auth/github/callback/", GithubCallbackView.as_view()),
+    
+    # User Projects
+    path("api/user-projects/", include("UserProjects.urls")),
 ]
