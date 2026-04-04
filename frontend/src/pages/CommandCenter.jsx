@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom'
 import Terminal from '../components/Terminal'
 import DiagnosisPanel from '../components/DiagnosisPanel'
 import SQLMonitor from '../components/SQLMonitor'
+import BlockchainVerifyModal from '../components/BlockchainVerifyModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
 import { runAgent } from '../lib/api'
-import { ArrowLeft, Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react'
+import { ArrowLeft, Loader2, CheckCircle2, XCircle, Zap, ShieldCheck } from 'lucide-react'
+import { logToBlockchain } from '../lib/logToBlockchain'
 
 export default function CommandCenter() {
   const { id: projectId } = useParams()
@@ -13,8 +15,13 @@ export default function CommandCenter() {
 
   // Run Agent state
   const [agentRunning, setAgentRunning] = useState(false)
-  const [agentResult, setAgentResult] = useState(null)   // { incident_id, summary, resolved }
-  const [agentError, setAgentError] = useState(null)
+  const [agentResult, setAgentResult]   = useState(null)
+  const [agentError, setAgentError]     = useState(null)
+  const [streamingLogs, setStreamingLogs] = useState([])
+
+  // Verify modal state
+  const [verifyOpen, setVerifyOpen]     = useState(false)
+  const [lastTxHash, setLastTxHash]     = useState('')
 
   const currentProject = projects[projectId];
 
@@ -68,6 +75,7 @@ export default function CommandCenter() {
     logToBlockchain(String(projectId), payload)
       .then(({ cid, txHash }) => {
         console.log(`🎉 Audit log complete — CID: ${cid} | TX: ${txHash}`);
+        setLastTxHash(txHash)  // store so Verify modal can pre-fill it
       })
       .catch((err) => {
         console.error('❌ Blockchain log failed:', err.message);
@@ -79,12 +87,83 @@ export default function CommandCenter() {
       setAgentError('You must be signed in to run the agent.')
       return
     }
+
     setAgentRunning(true)
     setAgentResult(null)
     setAgentError(null)
+    setStreamingLogs([{ type: 'system', text: '[SYSTEM] Initializing autonomous pipeline...' }])
+
     try {
-      const result = await runAgent(token, projectId)
-      setAgentResult(result)
+      const { runAgentStream } = await import('../lib/api')
+      
+      let currentAiLogIdx = -1;
+
+      await runAgentStream(token, projectId, {
+        onEvent: (evt) => {
+          console.log('[SSE EVENT]', evt);
+
+          if (evt.event === 'node_start') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'system', 
+              text: `\n[PIPELINE] >>> Node: ${evt.label || evt.name} starting...` 
+            }]);
+            // If it's a new diagnosis node, prepare to capture tokens
+            if (evt.name === 'diagnose') currentAiLogIdx = -1;
+          } 
+          
+          else if (evt.event === 'node_end') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'success', 
+              text: `[PIPELINE] <<< Node: ${evt.label || evt.name} complete.` 
+            }]);
+          }
+
+          else if (evt.event === 'llm_token') {
+            setStreamingLogs(prev => {
+              const next = [...prev];
+              // If we haven't started an AI bucket for this node, create one
+              if (currentAiLogIdx === -1 || next[currentAiLogIdx].type !== 'ai') {
+                currentAiLogIdx = next.length;
+                return [...next, { type: 'ai', text: evt.data.token }];
+              }
+              // Append to existing AI bucket
+              next[currentAiLogIdx] = { 
+                ...next[currentAiLogIdx], 
+                text: next[currentAiLogIdx].text + evt.data.token 
+              };
+              return next;
+            });
+          }
+
+          else if (evt.event === 'tool_start') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'normal', 
+              text: `[TOOL] Calling ${evt.name}...` 
+            }]);
+          }
+
+          else if (evt.event === 'done') {
+            setAgentResult({
+              incident_id: evt.data.incident_id,
+              resolved: evt.data.incident_resolved,
+              summary: evt.data.final_summary,
+            });
+            setStreamingLogs(prev => [...prev, { 
+              type: 'success', 
+              text: `\n[SYSTEM] Pipeline run finished. Incident ${evt.data.incident_id} state updated.` 
+            }]);
+          }
+
+          else if (evt.event === 'error') {
+            setAgentError(evt.data.message);
+            setStreamingLogs(prev => [...prev, { 
+              type: 'error', 
+              text: `[FATAL] ${evt.data.message}` 
+            }]);
+          }
+        }
+      });
+
     } catch (err) {
       setAgentError(err.message || 'Agent run failed')
     } finally {
@@ -141,6 +220,14 @@ export default function CommandCenter() {
               : <><Zap className="w-4 h-4" /> Run Agent</>
             }
           </button>
+
+          {/* Verify Integrity Button */}
+          <button
+            onClick={() => setVerifyOpen(true)}
+            className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-[#F5F5F5] border border-[#E5E5E5] hover:border-[#171717] text-[#171717] rounded-xl font-bold text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <ShieldCheck className="w-4 h-4" /> Verify Integrity
+          </button>
         </div>
       </header>
 
@@ -178,6 +265,7 @@ export default function CommandCenter() {
               aiDecision={currentAiDecision}
               safetyCheck={currentSafetyCheck}
               execution={currentExecution}
+              streamingLogs={streamingLogs}
             />
           </div>
 
@@ -224,6 +312,13 @@ export default function CommandCenter() {
         </div>
 
       </main>
+
+      {/* Blockchain Verify Modal */}
+      <BlockchainVerifyModal
+        isOpen={verifyOpen}
+        onClose={() => setVerifyOpen(false)}
+        defaultTxHash={lastTxHash}
+      />
     </div>
   )
 }

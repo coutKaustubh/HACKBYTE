@@ -171,14 +171,11 @@ class VMTools:
 
     # ── FILE OPERATIONS ───────────────────────────────────────────────────────
 
-    def write_file(self, path: str, content: str) -> dict:
-        target = resolve_remote_path(path, self.project_root)
-        return sftp_write(self.client, target, content)
-
     def rename_file(self, target: str, params: dict) -> dict:
-        src     = resolve_remote_path(target, self.project_root)
+        import posixpath
+        src     = posixpath.join(self.project_root, target) if not target.startswith("/") else target
         new_p   = params.get("new_path", target)
-        dst     = resolve_remote_path(new_p, self.project_root)
+        dst     = posixpath.join(self.project_root, new_p) if not new_p.startswith("/") else new_p
         self._run(f"mv {src} {dst} 2>&1")
         return {"action": "rename_file", "target": src, "status": "SUCCESS", "output": f"Renamed to {dst}"}
 
@@ -229,7 +226,8 @@ class VMTools:
         }
 
     def edit_config(self, target: str, params: dict) -> dict:
-        path    = resolve_remote_path(target, self.project_root)
+        import posixpath
+        path    = posixpath.join(self.project_root, target) if not target.startswith("/") else target
         changes = []
         for key, value in params.items():
             self._run(f"sed -i 's|^{key}.*|{key} = {value}|' {path}")

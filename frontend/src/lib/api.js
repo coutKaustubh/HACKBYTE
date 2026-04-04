@@ -77,3 +77,47 @@ export async function runAgent(accessToken, projectId, { source = 'frontend_trig
   if (!res.ok) throw new Error(await parseErrorResponse(res))
   return res.json()
 }
+
+/**
+ * Trigger the AI engine agent for a specific project with real-time streaming.
+ * Uses fetch + ReadableStream to support Authorization headers for SSE.
+ */
+export async function runAgentStream(accessToken, projectId, { source = 'frontend_trigger', serviceHint = null, onEvent } = {}) {
+  const url = new URL(apiUrl(`/api/user-projects/${projectId}/run-agent-stream/`), window.location.origin)
+  url.searchParams.set('source', source)
+  if (serviceHint) url.searchParams.set('service_hint', serviceHint)
+
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'text/event-stream',
+    },
+  })
+
+  if (!res.ok) throw new Error(await parseErrorResponse(res))
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n\n')
+    buffer = lines.pop()
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6))
+          onEvent(data)
+        } catch (e) {
+          console.error('Failed to parse SSE event:', line)
+        }
+      }
+    }
+  }
+}
