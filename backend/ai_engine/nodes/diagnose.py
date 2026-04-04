@@ -1,17 +1,17 @@
 import os
-
+from pathlib import Path
 from tools.gemini_tools import GeminiTools
 from tools.spacetime_tools import SpacetimeTools
 from dotenv import load_dotenv
-import os 
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 gemini = GeminiTools()
 st = SpacetimeTools()
 
 def diagnose_node(state: dict) -> dict:
     incident_id = state["incident_id"]
+    project_id  = state.get("project_id", 0)
 
     # HEURISTIC: Skip LLM reasoning if it's a known simple case (saves time/tokens)
     logs = state.get("raw_logs", "")
@@ -29,14 +29,12 @@ def diagnose_node(state: dict) -> dict:
 
     if pm2_logs_empty and no_process_running:
         project_root = os.getenv("PROJECT_ROOT", "/root/app")
-        
-        # Smart detection: check if this is an npm project (Next.js, Express, etc)
-        # Use 'npm -- start' via pm2 instead of a bare index.js
         app_name = os.path.basename(project_root.rstrip("/")) or "app"
         
         diagnosis = {
             "error_type": "BOOT_FAILURE",
             "root_cause": "The application is not running. Process missing and no logs found.",
+            "severity": "high",
             "actions": [
                 {
                     "action": "list_directory",
@@ -54,7 +52,6 @@ def diagnose_node(state: dict) -> dict:
                 },
                 {
                     "action": "pm2_start",
-                    # npm -- start works for Next.js, CRA, Express etc. without needing index.js
                     "target": "npm",
                     "params": {"name": app_name, "args": "-- start"},
                     "reason": "Start the application via pm2 using npm start script",
@@ -63,21 +60,41 @@ def diagnose_node(state: dict) -> dict:
                 }
             ]
         }
-        print("DIAGNOSIS_READY", incident_id, diagnosis)
-        return {**state, "diagnosis": diagnosis}
 
-    # WOW FACTOR: stream reasoning tokens to SpacetimeDB live
-    reasoning_chunks = []
-    def on_token(chunk):
-        reasoning_chunks.append(chunk)
-        print("AGENT_THINKING", incident_id, {"chunk": chunk})
+        # ── Emit: fast-path diagnosis ──────────────────────────────────
+        #print("DIAGNOSIS_READY", incident_id, diagnosis)
+        st.emit("DIAGNOSIS_READY", incident_id, {
+            "project_id": project_id,
+            "error_type": diagnosis["error_type"],
+            "root_cause": diagnosis["root_cause"],
+            "fast_path": True,
+        }, project_id=project_id)
 
-    # stream the thinking first (wow factor)
-    gemini.stream_diagnose(
+        # ── Domain table: record AI decision ──────────────────────────
+        st.add_ai_decision(
+            project_id=project_id,
+            incident_id=incident_id,
+            error_type=diagnosis["error_type"],
+            root_cause=diagnosis["root_cause"],
+            severity=diagnosis["severity"],
+            num_actions=len(diagnosis["actions"]),
+        )
+
+        return {**state, "project_id": project_id, "diagnosis": diagnosis}
+
+    # WOW FACTOR: get the reasoning text, emit ONE event with the full content
+    reasoning_text = gemini.stream_diagnose(
         logs=state["raw_logs"],
         snapshot=state["system_snapshot"],
-        on_token=on_token
+        on_token=lambda chunk: None  # collect silently — no per-word HTTP calls
     )
+
+    # Emit a single AGENT_THINKING event with the full reasoning
+    st.emit("AGENT_THINKING", incident_id, {
+        "project_id": project_id,
+        "reasoning": reasoning_text[:500] if reasoning_text else "",
+    }, project_id=project_id)
+
 
     # then get the structured diagnosis
     diagnosis = gemini.diagnose(
@@ -86,6 +103,30 @@ def diagnose_node(state: dict) -> dict:
         configs=state["config_files"]
     )
 
-    print("DIAGNOSIS_READY", incident_id, diagnosis)
+    # ── Emit: full diagnosis ready ─────────────────────────────────────
+    # print("DIAGNOSIS_READY" , incident_id , {
+    #     "project_id": project_id,
+    #     "error_type": diagnosis.get("error_type", ""),
+    #     "root_cause": diagnosis.get("root_cause", ""),
+    #     "severity": diagnosis.get("severity", ""),
+    #     "num_actions": len(diagnosis.get("actions", [])),
+    # })
+    st.emit("DIAGNOSIS_READY", incident_id, {
+        "project_id": project_id,
+        "error_type": diagnosis.get("error_type", ""),
+        "root_cause": diagnosis.get("root_cause", ""),
+        "severity": diagnosis.get("severity", ""),
+        "num_actions": len(diagnosis.get("actions", [])),
+    }, project_id=project_id)
 
-    return {**state, "diagnosis": diagnosis}
+    # ── Domain table: record AI decision ──────────────────────────────
+    st.add_ai_decision(
+        project_id=project_id,
+        incident_id=incident_id,
+        error_type=diagnosis.get("error_type", ""),
+        root_cause=diagnosis.get("root_cause", ""),
+        severity=diagnosis.get("severity", ""),
+        num_actions=len(diagnosis.get("actions", [])),
+    )
+
+    return {**state, "project_id": project_id, "diagnosis": diagnosis}

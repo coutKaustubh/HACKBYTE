@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV)
 
 
 class SSHNotConnectedError(RuntimeError):
@@ -12,13 +14,19 @@ class SSHNotConnectedError(RuntimeError):
 class VMTools:
     def __init__(self):
         self.client = None
+        self._mock = False
 
         use_ssh = os.getenv("USE_SSH", "false").lower() == "true"
+
         if not use_ssh:
-            raise SSHNotConnectedError(
-                "[VMTools] USE_SSH is 'false' in .env — refusing to start. "
-                "Set USE_SSH=true and provide valid SSH credentials."
-            )
+            # ── DEMO / LOCAL MODE ─────────────────────────────────────────
+            # Instead of refusing, run in mock mode so the full agent pipeline
+            # can execute end-to-end without a real VM connection.
+            self._mock = True
+            self.project_root = os.getenv("PROJECT_ROOT", "/root/app")
+            self.app_url = ""
+            print("[VMTools] USE_SSH=false → running in MOCK mode (demo/local)")
+            return
 
         import paramiko
         self.client = paramiko.SSHClient()
@@ -40,20 +48,58 @@ class VMTools:
                 "Fix your SSH credentials in .env and retry."
             ) from e
 
-        # Public URL for /health checks
         base = os.getenv("PUBLIC_APP_URL", "")
         self.app_url = base.rstrip("/") if base else ""
-
         self.project_root = os.getenv("PROJECT_ROOT", "/root/app").rstrip("/")
         print(f"[VMTools] SSH connected → {os.getenv('VULTR_VM_IP')} | project: {self.project_root}")
 
     def _run(self, cmd: str) -> str:
+        if self._mock:
+            return self._mock_run(cmd)
         if self.client is None:
             raise SSHNotConnectedError("[VMTools] SSH client is not connected.")
         _, stdout, stderr = self.client.exec_command(cmd)
         out = stdout.read().decode().strip()
         err = stderr.read().decode().strip()
         return out if out else err
+
+    def _mock_run(self, cmd: str) -> str:
+        """Return simulated output so the agent can reason and plan without a real VM."""
+        if "pm2 status" in cmd:
+            return (
+                "┌─────┬──────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┐\n"
+                "│ id  │ name         │ version │ mode    │ pid      │ uptime │ ↺    │ status    │\n"
+                "├─────┼──────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┤\n"
+                "│ 0   │ app          │ 1.0.0   │ fork    │ N/A      │ 0      │ 15   │ errored   │\n"
+                "└─────┴──────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┘"
+            )
+        if "journalctl" in cmd or "tail" in cmd:
+            return (
+                "Apr 04 22:00:01 server app[1234]: Error: Cannot find module './routes/api'\n"
+                "Apr 04 22:00:01 server app[1234]: at Function.Module._resolveFilename\n"
+                "Apr 04 22:00:01 server app[1234]: at Function.Module._load\n"
+                "Apr 04 22:00:02 server systemd[1]: app.service: Main process exited, code=exited\n"
+                "Apr 04 22:00:02 server systemd[1]: app.service: Failed with result 'exit-code'."
+            )
+        if "uptime" in cmd:
+            return " 22:00:01 up 5 days, 3:12,  1 user,  load average: 0.12, 0.18, 0.20"
+        if "free -h" in cmd:
+            return "              total   used   free\nMem:          3.8Gi  2.1Gi  1.7Gi\nSwap:         1.0Gi  0.0Gi  1.0Gi"
+        if "df -h" in cmd:
+            return "Filesystem  Size  Used Avail Use%\n/dev/vda1    50G   18G   30G  38%"
+        if "ps aux" in cmd:
+            return "USER  PID %CPU %MEM CMD\nroot  1    0.0  0.1 /sbin/init\nroot  123  0.0  0.5 node /root/app/index.js"
+        if "systemctl --failed" in cmd:
+            return "UNIT        LOAD   ACTIVE SUB    DESCRIPTION\napp.service loaded failed failed Node App"
+        if "ls -la" in cmd:
+            return "total 32\ndrwxr-xr-x  app/\n-rw-r--r--  package.json\n-rw-r--r--  index.js\n-rw-r--r--  .env"
+        if "cat" in cmd and "package.json" in cmd:
+            return '{"name":"app","scripts":{"start":"node index.js","build":"echo build"},"dependencies":{"express":"^4.18.2"}}'
+        if "pm2 start" in cmd or "pm2 restart" in cmd:
+            return "[PM2] Starting /usr/bin/npm in fork_mode (1 instance)\n[PM2] Done."
+        if "npm install" in cmd:
+            return "added 127 packages in 8s"
+        return f"[MOCK] Command executed: {cmd[:60]}"
 
     # ── OBSERVATION TOOLS ────────────────────────────────────────────
 
@@ -68,17 +114,14 @@ class VMTools:
     def write_file(self, path: str, content: str) -> dict:
         import posixpath
         target_path = posixpath.join(self.project_root, path) if not path.startswith("/") else path
+        if self._mock:
+            return {"action": "write_file", "target": target_path, "status": "SUCCESS", "output": "[MOCK] File written."}
         try:
             sftp = self.client.open_sftp()
             with sftp.file(target_path, "w") as f:
                 f.write(content)
             sftp.close()
-            return {
-                "action": "write_file",
-                "target": target_path,
-                "status": "SUCCESS",
-                "output": "File written remotely on Vultr via SFTP.",
-            }
+            return {"action": "write_file", "target": target_path, "status": "SUCCESS", "output": "File written remotely via SFTP."}
         except Exception as e:
             return {"action": "write_file", "target": target_path, "status": "FAILED", "output": f"SFTP write failed: {e}"}
 
@@ -109,7 +152,7 @@ class VMTools:
 
     def get_system_snapshot(self) -> dict:
         app_status = "Skipped (PUBLIC_APP_URL not set)"
-        if self.app_url:
+        if not self._mock and self.app_url:
             try:
                 import httpx
                 resp = httpx.get(f"{self.app_url}/health", timeout=5.0)
@@ -153,7 +196,7 @@ class VMTools:
 
     def pm2_start(self, target: str, params: dict) -> dict:
         name = params.get("name", os.path.basename(self.project_root.rstrip("/")) or "app")
-        extra_args = params.get("args", "")  # e.g. '-- start' for npm-based projects
+        extra_args = params.get("args", "")
         cmd = f"cd {self.project_root} && pm2 start {target} --name {name}"
         if extra_args:
             cmd += f" {extra_args}"

@@ -1,9 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Auth from './pages/Auth'
 import AuthCallback from './pages/AuthCallback'
 import Dashboard from './pages/Dashboard'
 import CommandCenter from './pages/CommandCenter'
-import ProjectData from './pages/ProjectData'
 import Home from './components/home'
 
 function App() {
@@ -14,7 +13,6 @@ function App() {
         <Route path="/auth" element={<Auth />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/project-data" element={<ProjectData />} />
         <Route path="/project/:id" element={<CommandCenter />} />
       </Routes>
     </BrowserRouter>

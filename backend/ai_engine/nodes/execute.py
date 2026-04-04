@@ -1,10 +1,10 @@
 import os
-
+from pathlib import Path
 from dotenv import load_dotenv
 from tools.vm_tools import VMTools
 from tools.spacetime_tools import SpacetimeTools
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 vm = VMTools()
 st = SpacetimeTools()
@@ -16,6 +16,7 @@ def _agent_execute_enabled() -> bool:
 
 def execute_node(state: dict) -> dict:
     incident_id = state["incident_id"]
+    project_id  = state.get("project_id", 0)
     execution_results = []
     all_success = True
 
@@ -25,9 +26,20 @@ def execute_node(state: dict) -> dict:
         summary["summary"] = (
             f"{summary['summary']} (Execute skipped: AGENT_EXECUTE_ACTIONS=false)"
         )
-        print("INCIDENT_RESOLVED", incident_id, summary)
+        # print("INCIDENT_RESOLVED" , incident_id, {
+        #     "project_id": project_id,
+        #     "skipped_execute": True,
+        #     **summary,
+        # })
+        st.emit("INCIDENT_RESOLVED", incident_id, {
+            "project_id": project_id,
+            "skipped_execute": True,
+            **summary,
+        }, project_id=project_id)
+        st.resolve_incident(project_id=project_id, incident_id=incident_id)
         return {
             **state,
+            "project_id": project_id,
             "execution_results": [],
             "incident_resolved": False,
             "summary_data": summary,
@@ -54,8 +66,25 @@ def execute_node(state: dict) -> dict:
             )
             output["intent_id"] = result["intent_id"]
             output["status"] = output.get("status", "SUCCESS")
+            # print("ACTION_EXECUTED" , incident_id, {
+            #     "project_id": project_id,
+            #     **output,
+            # })
+            st.emit("ACTION_EXECUTED", incident_id, {
+                "project_id": project_id,
+                **output,
+            }, project_id=project_id)
 
-            print("ACTION_EXECUTED", incident_id, output)
+            # ── Domain table: record execution ─────────────────────────
+            st.record_execution(
+                project_id=project_id,
+                incident_id=incident_id,
+                intent_id=result["intent_id"],
+                action=intent["action"],
+                status="success",
+                output=str(output.get("output", "")),
+            )
+
             execution_results.append(output)
 
         except Exception as e:
@@ -66,14 +95,42 @@ def execute_node(state: dict) -> dict:
                 "status": "FAILED",
                 "error": str(e)
             }
-            print("ACTION_FAILED", incident_id, failed)
+            # print('ACTION_FAILED' , incident_id, {
+            #     "project_id": project_id,
+            #     **failed,
+            # })
+            st.emit("ACTION_FAILED", incident_id, {
+                "project_id": project_id,
+                **failed,
+            }, project_id=project_id)
+
+            # ── Domain table: record failed execution ──────────────────
+            st.record_execution(
+                project_id=project_id,
+                incident_id=incident_id,
+                intent_id=result["intent_id"],
+                action=intent["action"],
+                status="failed",
+                output=str(e),
+            )
+
             execution_results.append(failed)
 
     summary = build_summary(state, execution_results)
-    print("INCIDENT_RESOLVED", incident_id, summary)
+
+    # print("INCIDENT_RESOLVED" ,incident_id, {
+    #     "project_id": project_id,
+    #     **summary,
+    # } )
+    st.emit("INCIDENT_RESOLVED", incident_id, {
+        "project_id": project_id,
+        **summary,
+    }, project_id=project_id)
+    st.resolve_incident(project_id=project_id, incident_id=incident_id)
 
     return {
         **state,
+        "project_id": project_id,
         "execution_results": execution_results,
         "incident_resolved": all_success,
         "summary_data": summary,
@@ -83,7 +140,7 @@ def execute_node(state: dict) -> dict:
 def build_summary(state: dict, execution_results: list) -> dict:
     blocked = [r for r in state["enforcement_results"] if r["decision"] == "BLOCKED"]
     allowed = [r for r in state["enforcement_results"] if r["decision"] == "ALLOWED"]
-    succeeded = [r for r in execution_results if r.get("status") == "SUCCESS"]
+    succeeded = [r for r in execution_results if r.get("status") in ("SUCCESS", "success")]
 
     return {
         "incident_id": state["incident_id"],

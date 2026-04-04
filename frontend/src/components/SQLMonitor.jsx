@@ -27,11 +27,11 @@ export default function SQLMonitor({ projectId }) {
         if (tableName === 'incident') {
           query = `SELECT * FROM incident WHERE project_id = ${projectId}`;
         } else if (['execution', 'ai_decision', 'safety_check'].includes(tableName)) {
-          query = `SELECT t.* FROM ${tableName} t JOIN incident i ON t.incident_id = i.id WHERE i.project_id = ${projectId}`;
+          // Join on incident.incident_id (string), NOT incident.id (u64 PK)
+          query = `SELECT t.* FROM ${tableName} t JOIN incident i ON t.incident_id = i.incident_id WHERE i.project_id = ${projectId}`;
         } else if (tableName === 'agent_event') {
-             // agent_event.incident_id is a string in the current schema (u64 casted or similar)
-             // We'll try to join it if possible
-             query = `SELECT t.* FROM agent_event t JOIN incident i ON CAST(t.incident_id AS BIGINT) = i.id WHERE i.project_id = ${projectId}`;
+          // Both sides are strings — join directly on incident.incident_id
+          query = `SELECT t.* FROM agent_event t JOIN incident i ON t.incident_id = i.incident_id WHERE i.project_id = ${projectId}`;
         }
 
         const response = await fetch('http://127.0.0.1:3000/v1/database/realitypatch-db-2lsay/sql', {

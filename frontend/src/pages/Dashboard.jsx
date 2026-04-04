@@ -220,16 +220,16 @@ export default function Dashboard() {
 
               // Args order must match the reducer definition:
               // (user_id u64, django_project_id u64, name, description, ssh_key, server_ip, root_directory, deploy_commands)
-              await callStdbReducer('create_project', [
-                userId,
-                projectId,
-                data.name || '',
-                data.description || '',
-                data.sshKey || '',
-                data.serverIp || '',
-                data.rootDirectory || '',
-                data.userDeployCommands || 'npm install && npm run build && npm start',
-              ]);
+              await callStdbReducer('create_project', {
+                user_id: userId,
+                django_project_id: projectId,
+                name: data.name || '',
+                description: data.description || '',
+                ssh_key: data.sshKey || '',
+                server_ip: data.serverIp || '',
+                root_directory: data.rootDirectory || '',
+                deploy_commands: data.userDeployCommands || 'npm install && npm run build && npm start',
+              });
               console.log('[STDB HTTP] create_project ✓');
             } catch (stdbErr) {
               console.warn('[STDB HTTP] Mirror failed (non-fatal):', stdbErr.message);

@@ -5,6 +5,7 @@ st = SpacetimeTools()
 
 def plan_node(state: dict) -> dict:
     incident_id = state["incident_id"]
+    project_id  = state.get("project_id", 0)
     actions = state["diagnosis"].get("actions", [])
 
     intents = []
@@ -36,9 +37,16 @@ def plan_node(state: dict) -> dict:
     )
     intents.append(demo_blocked_intent)
 
-    print("PLAN_READY", incident_id, {
+    # ── Emit: plan is ready ────────────────────────────────────────────
+    # print("PLAN_READY" , incident_id , {
+    #     "project_id" : project_id,
+    #     "total_intents" : len(intents),
+    #     "intents" : [i.dict() for i in intents],
+    # })
+    st.emit("PLAN_READY", incident_id, {
+        "project_id": project_id,
         "total_intents": len(intents),
-        "intents": [i.dict() for i in intents]
-    })
+        "intents": [i.dict() for i in intents],
+    }, project_id=project_id)
 
-    return {**state, "intent_plan": [i.dict() for i in intents]}
+    return {**state, "project_id": project_id, "intent_plan": [i.dict() for i in intents]}

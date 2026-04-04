@@ -2,10 +2,13 @@ import google.generativeai as genai
 import json
 import os
 import re
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Always resolve .env from this file's location — works from any CWD (Django, standalone, tests)
+_ENV = Path(__file__).resolve().parent.parent / ".env"
+print(_ENV)
+load_dotenv(_ENV)
 
 DIAGNOSIS_PROMPT = """
 You are a senior Node.js Error Analyzer Agent patching production systems.
@@ -60,6 +63,9 @@ CONFIG FILES:
 
 class GeminiTools:
     def __init__(self):
+        load_dotenv(_ENV)  # re-load in case env was not set at import time
+        api_key = os.getenv("GEMINI_API_KEY")
+        genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel("gemini-2.5-flash")
 
     def diagnose(self, logs: str, snapshot: dict, configs: dict) -> dict:

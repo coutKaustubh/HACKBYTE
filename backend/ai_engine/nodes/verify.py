@@ -1,10 +1,13 @@
 import time
 from tools.vm_tools import VMTools
+from tools.spacetime_tools import SpacetimeTools
 
 vm = VMTools()
+st = SpacetimeTools()
 
 def verify_node(state: dict) -> dict:
     incident_id = state.get("incident_id", "unknown")
+    project_id  = state.get("project_id", 0)
     retries = state.get("retries", 0)
 
     print(f"\n🔄 [Verify Node] Attempting verification after pass {retries + 1}...")
@@ -29,13 +32,30 @@ def verify_node(state: dict) -> dict:
     # Consider resolved if PM2 shows online OR health endpoint responds
     incident_resolved = pm2_online or health_ok
 
-    if incident_resolved:
-        print(f"✅ [Verify Node] App is {'online in PM2' if pm2_online else ''}{'+ health OK' if health_ok else ''}. Incident resolved!")
-    else:
-        print(f"❌ [Verify Node] App still not running. PM2: {pm2_out[:200].strip()}")
+    status_msg = (
+        "RESOLVED — app is online" if incident_resolved
+        else f"STILL_DOWN — retry {retries + 1}"
+    )
+
+    # ── Emit: verification result ──────────────────────────────────
+    print("INCIDENT_RESOLVED" if incident_resolved else "LOGS_COLLECTED", incident_id, {
+        "project_id": project_id,
+        "verify_pass": retries + 1,
+        "pm2_online": pm2_online,
+        "health_ok": health_ok,
+        "status": status_msg,
+    })
+    st.emit("INCIDENT_RESOLVED" if incident_resolved else "LOGS_COLLECTED", incident_id, {
+        "project_id": project_id,
+        "verify_pass": retries + 1,
+        "pm2_online": pm2_online,
+        "health_ok": health_ok,
+        "status": status_msg,
+    }, project_id=project_id)
 
     return {
         **state,
+        "project_id": project_id,
         "incident_resolved": incident_resolved,
         "retries": retries + 1
     }
