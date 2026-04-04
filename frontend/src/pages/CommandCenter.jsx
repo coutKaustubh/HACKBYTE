@@ -1,13 +1,13 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Terminal from '../components/Terminal'
 import DiagnosisPanel from '../components/DiagnosisPanel'
 import SQLMonitor from '../components/SQLMonitor'
+import BlockchainVerifyModal from '../components/BlockchainVerifyModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
-import { ArrowLeft, Layout, Terminal as TermIcon, Shield, Activity } from 'lucide-react'
+import { ArrowLeft, Loader2, CheckCircle2, XCircle, Zap, ShieldCheck } from 'lucide-react'
 import { logToBlockchain } from '../lib/logToBlockchain'
 import { runAgent } from '../lib/api'
-import { ArrowLeft, Play, Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react'
 
 export default function CommandCenter() {
   const { id: projectId } = useParams()
@@ -15,8 +15,12 @@ export default function CommandCenter() {
 
   // Run Agent state
   const [agentRunning, setAgentRunning] = useState(false)
-  const [agentResult, setAgentResult] = useState(null)   // { incident_id, summary, resolved }
-  const [agentError, setAgentError] = useState(null)
+  const [agentResult, setAgentResult]   = useState(null)
+  const [agentError, setAgentError]     = useState(null)
+
+  // Verify modal state
+  const [verifyOpen, setVerifyOpen]     = useState(false)
+  const [lastTxHash, setLastTxHash]     = useState('')
 
   const currentProject = projects[projectId];
 
@@ -63,6 +67,7 @@ export default function CommandCenter() {
     logToBlockchain(String(projectId), payload)
       .then(({ cid, txHash }) => {
         console.log(`🎉 Audit log complete — CID: ${cid} | TX: ${txHash}`);
+        setLastTxHash(txHash)  // store so Verify modal can pre-fill it
       })
       .catch((err) => {
         console.error('❌ Blockchain log failed:', err.message);
@@ -135,6 +140,14 @@ export default function CommandCenter() {
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Running...</>
               : <><Zap className="w-4 h-4" /> Run Agent</>
             }
+          </button>
+
+          {/* Verify Integrity Button */}
+          <button
+            onClick={() => setVerifyOpen(true)}
+            className="flex items-center gap-2 px-5 py-2 bg-white hover:bg-[#F5F5F5] border border-[#E5E5E5] hover:border-[#171717] text-[#171717] rounded-xl font-bold text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <ShieldCheck className="w-4 h-4" /> Verify Integrity
           </button>
         </div>
       </header>
@@ -219,6 +232,13 @@ export default function CommandCenter() {
         </div>
 
       </main>
+
+      {/* Blockchain Verify Modal */}
+      <BlockchainVerifyModal
+        isOpen={verifyOpen}
+        onClose={() => setVerifyOpen(false)}
+        defaultTxHash={lastTxHash}
+      />
     </div>
   )
 }
