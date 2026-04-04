@@ -54,7 +54,6 @@ INSTALLED_APPS = [
     # Custom
     "authenticationApp",
     "UserProjects",
-    "AllLogs",
 ]
 
 # ========================
