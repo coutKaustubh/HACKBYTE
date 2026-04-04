@@ -15,6 +15,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "sshKey",
             "serverIp",
             "rootDirectory",
+            "userDeployCommands",
             "owner",
             "created_at",
             "updated_at",

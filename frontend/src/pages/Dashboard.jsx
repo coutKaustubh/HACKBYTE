@@ -1,20 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import AddProjectModal from '../components/AddProjectModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
+import { fetchProjects, createProject as createProjectApi } from '../lib/api'
 import { Boxes, Activity, ArrowRight, Plus } from 'lucide-react'
 
 export default function Dashboard() {
-  const { projects, incidents, isConnected, users, createProject } = useSpacetimeDB();
+  const { projects, incidents, isConnected } = useSpacetimeDB();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  const projectList = Object.values(projects);
-  const incidentList = Object.values(incidents);
-  const userList = Object.values(users);
+  const [djangoProjects, setDjangoProjects] = useState(null);
+  const [projectsLoadError, setProjectsLoadError] = useState(null);
 
-  // For now, we assume the first user is the one creating projects
-  const currentUserId = userList[0]?.id || 0n;
+  const refreshDjangoProjects = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setDjangoProjects(null);
+      return;
+    }
+    setProjectsLoadError(null);
+    fetchProjects(token)
+      .then(setDjangoProjects)
+      .catch((err) => {
+        setProjectsLoadError(err.message || 'Failed to load projects');
+        setDjangoProjects([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    refreshDjangoProjects();
+  }, [refreshDjangoProjects]);
+
+  const useDjangoList = localStorage.getItem('token') != null && djangoProjects != null;
+  const projectList = useDjangoList ? djangoProjects : Object.values(projects);
+  const incidentList = Object.values(incidents);
 
   const activeIncidentsCount = incidentList.filter(inc => inc.status === 'error').length;
 
@@ -84,7 +103,13 @@ export default function Dashboard() {
           <div className="flex-1 h-px bg-gradient-to-r from-[#E5E5E5] to-transparent" />
         </div>
 
-        {projectList.length === 0 && isConnected ? (
+        {projectsLoadError && (
+          <div className="mb-6 rounded-xl border border-error/30 bg-error/5 px-4 py-3 text-sm text-error">
+            {projectsLoadError}
+          </div>
+        )}
+
+        {projectList.length === 0 && (isConnected || useDjangoList) ? (
           <div className="text-center py-24 bg-white border border-dashed border-[#E5E5E5] rounded-[2rem]">
              <Boxes className="w-16 h-16 text-[#E5E5E5] mx-auto mb-4" />
              <h3 className="text-xl font-bold text-[#737373]">No Projects Configured</h3>
@@ -137,15 +162,18 @@ export default function Dashboard() {
       <AddProjectModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSubmit={(data) => {
-          createProject(
-            currentUserId,
-            data.name, 
-            data.description, 
-            data.sshKey, 
-            data.serverIp, 
-            data.rootDirectory
-          );
+        onSubmit={async (data) => {
+          const token = localStorage.getItem('token');
+          if (!token) {
+            window.alert('Sign in first so your project can be saved to your account.');
+            return;
+          }
+          try {
+            await createProjectApi(token, data);
+            refreshDjangoProjects();
+          } catch (err) {
+            window.alert(err.message || 'Could not create project');
+          }
         }} 
       />
     </div>

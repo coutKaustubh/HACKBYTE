@@ -42,6 +42,9 @@ export async function createProject(accessToken, payload) {
     sshKey: payload.sshKey,
     serverIp: payload.serverIp,
     rootDirectory: payload.rootDirectory,
+    userDeployCommands:
+      payload.userDeployCommands?.trim() ||
+      'npm install && npm run build > logs/build.log 2>&1 && npm start',
   }
   const res = await fetch(apiUrl('/api/user-projects/'), {
     method: 'POST',

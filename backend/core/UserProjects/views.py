@@ -14,5 +14,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Project.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
-        # Automatically set the owner to the current authenticated user
+        # Persist all validated serializer fields (name, description, sshKey, server_ip,
+        # rootDir, userDeployCommands) and attach the authenticated user as owner.
         serializer.save(owner=self.request.user)
