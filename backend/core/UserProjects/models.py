@@ -9,7 +9,11 @@ class Project(models.Model):
     description = models.TextField(blank=True)
     sshKey = models.CharField(max_length = 500)
     server_ip = models.CharField(max_length=100)
+    rootDir = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+
 
     class Meta:
         ordering = ['-created_at']

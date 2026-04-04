@@ -27,6 +27,7 @@ class CustomUser(AbstractUser):
 
     profile_picture = models.URLField(blank=True, null=True)
     google_id = models.CharField(max_length=100, blank=True, null=True)
+    github_id = models.CharField(max_length=100, blank=True, null=True)
     is_premium = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
