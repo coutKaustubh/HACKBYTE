@@ -18,10 +18,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    // if (!token) {
-    //   navigate('/');
-    //   return;
-    // }
+    if (!token) {
+      navigate('/');
+      return;
+    }
 
     try {
       const base64Url = token.split('.')[1];
