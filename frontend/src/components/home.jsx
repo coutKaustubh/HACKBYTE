@@ -54,10 +54,10 @@ export default function Home() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-extrabold text-[#171717] tracking-tighter leading-tight drop-shadow-sm">
-            Autonomous System
+            Detect,Diagnose and Deploy Fixes
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-500">
-              Recovery Platform
+              before the pager even rings
             </span>
           </h1>
           

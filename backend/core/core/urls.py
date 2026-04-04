@@ -21,8 +21,10 @@ from authenticationApp.social_auth import GoogleLoginView, GoogleCallbackView, G
 urlpatterns = [
     path('admin/', admin.site.urls),
     # 
-    path("auth/", include("dj_rest_auth.urls")),
-    path("auth/registration/", include("dj_rest_auth.registration.urls")),
+    # path("auth/", include("dj_rest_auth.urls")),
+    # path("auth/registration/", include("dj_rest_auth.registration.urls")),
+    path("api/auth/", include("dj_rest_auth.urls")),
+    path("api/auth/registration/", include("dj_rest_auth.registration.urls")),
     path("accounts/", include("allauth.urls")),
 
      # 🔥 your custom flow

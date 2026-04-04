@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: dhurandar
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: "vaibhav2807"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  spacetimedb:
+    image: clockworklabs/spacetimedb:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - spacetime_data:/var/lib/spacetimedb
+
+  hardhat:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    ports:
+      - "8545:8545"
+    volumes:
+      - ./blockchain:/app
+      - /app/node_modules
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=1
+      # We override the Django database settings to use our Docker Postgres network config
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=dhurandar
+      - DB_USER=root
+      - DB_PASSWORD="vaibhav2807"
+      - DB_HOST=db
+      - DB_PORT=5432
+      # Ensure your .env variables (like GEMINI_API_KEY) are loaded down here in reality
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      # Block the host virtual environment from overriding the container system dependencies
+      - /app/venv
+      - /app/.venv
+    depends_on:
+      - db
+      - spacetimedb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  spacetime_data:

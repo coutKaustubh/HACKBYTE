@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import AddProjectModal from '../components/AddProjectModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
-import { fetchProjects, createProject as createProjectApi } from '../lib/api'
+import { fetchProjects, createProject as createProjectApi, fetchUser } from '../lib/api'
 import { Boxes, Activity, ArrowRight, Plus } from 'lucide-react'
 
 function decodeJwtPayload(token) {
@@ -56,6 +56,20 @@ export default function Dashboard() {
       const payload = decodeJwtPayload(token);
       setUserName(payload.name || payload.username || payload.email || 'User');
     } catch { setUserName('User'); }
+    
+    // Fetch live profile to get exact first name
+    fetchUser(token).then(user => {
+      if (user?.first_name) {
+        setUserName(user.first_name);
+      } else if (user?.username) {
+        setUserName(user.username);
+      } else if (user?.email) {
+        setUserName(user.email.split('@')[0]);
+      }
+    }).catch(err => {
+      console.warn("Could not fetch explicit profile:", err);
+    });
+
     refreshDjangoProjects();
   }, [navigate, refreshDjangoProjects]);
 

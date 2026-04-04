@@ -35,6 +35,16 @@ export async function fetchProjects(accessToken) {
   return res.json()
 }
 
+export async function fetchUser(accessToken) {
+  const res = await fetch(apiUrl('/api/auth/user/'), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  })
+  if (!res.ok) throw new Error(await parseErrorResponse(res))
+  return res.json()
+}
 export async function createProject(accessToken, payload) {
   const body = {
     name: payload.name,

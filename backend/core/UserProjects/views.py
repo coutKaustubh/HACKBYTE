@@ -16,6 +16,7 @@ from .models import Project
 from .serializers import ProjectSerializer
 from rest_framework.renderers import BaseRenderer
 
+
 class SSERenderer(BaseRenderer):
     media_type = 'text/event-stream'
     format = 'sse'
@@ -25,8 +26,6 @@ class SSERenderer(BaseRenderer):
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 AI_ENGINE_URL = os.getenv("AI_ENGINE_URL", "http://localhost:8000")
 
-@method_decorator(cache_page(60 * 5), name='list')
-@method_decorator(cache_page(60 * 5), name='retrieve')
 class ProjectViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows users to create, view, update, and delete their own projects.
