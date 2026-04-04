@@ -51,7 +51,7 @@ export function useSpacetimeDB() {
              setExecutions(execMap);
 
              const aiMap = {};
-             for (let ai of allAiDecisions) { aiMap[ai.incidentId ?? ai.incident_id] = ai; }
+             for (let ai of allAiDecisions) { aiMap[Number(ai.incidentId)] = ai; }
              setAiDecisions(aiMap);
 
              const safetyMap = {};
@@ -88,9 +88,9 @@ export function useSpacetimeDB() {
       conn.db.execution.onInsert((ctx, row) => {
          setExecutions(prev => ({ ...prev, [row.id]: row }));
       });
-      conn.db.ai_decision.onInsert((ctx, row) => {
-         setAiDecisions(prev => ({ ...prev, [row.incidentId ?? row.incident_id]: row }));
-      });
+       conn.db.ai_decision.onInsert((ctx, row) => {
+         setAiDecisions(prev => ({ ...prev, [Number(row.incidentId)]: row }));
+       });
       conn.db.safety_check.onInsert((ctx, row) => {
          setSafetyChecks(prev => ({ ...prev, [row.id]: row }));
       });
@@ -111,9 +111,9 @@ export function useSpacetimeDB() {
       conn.db.execution.onUpdate((ctx, oldRow, newRow) => {
          setExecutions(prev => ({ ...prev, [newRow.id]: newRow }));
       });
-      conn.db.ai_decision.onUpdate((ctx, oldRow, newRow) => {
-         setAiDecisions(prev => ({ ...prev, [newRow.incidentId ?? newRow.incident_id]: newRow }));
-      });
+       conn.db.ai_decision.onUpdate((ctx, oldRow, newRow) => {
+         setAiDecisions(prev => ({ ...prev, [Number(newRow.incidentId)]: newRow }));
+       });
 
       conn.onDisconnect(() => {
         setIsConnected(false);

@@ -128,9 +128,10 @@ class VMTools:
             return {"action": "write_file", "target": target_path, "status": "FAILED", "output": f"SFTP write failed: {e}"}
 
     def list_directory(self, target: str) -> dict:
-        path = resolve_remote_path(target, self.project_root)
-        out  = self._run(f"ls -la {path} 2>&1")
-        return {"action": "list_directory", "target": path, "status": "SUCCESS", "output": out}
+        import posixpath
+        target_path = posixpath.join(self.project_root, target) if not target.startswith("/") else target
+        out = self._run(f"ls -la {target_path} 2>&1")
+        return {"action": "list_directory", "target": target_path, "status": "SUCCESS", "output": out}
 
     def check_service_status(self, service: str) -> str:
         return self._run(f"systemctl status {service} --no-pager 2>&1")

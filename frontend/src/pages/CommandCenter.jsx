@@ -1,13 +1,11 @@
-import { useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Terminal from '../components/Terminal'
 import DiagnosisPanel from '../components/DiagnosisPanel'
 import SQLMonitor from '../components/SQLMonitor'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
-import { ArrowLeft, Layout, Terminal as TermIcon, Shield, Activity } from 'lucide-react'
-import { logToBlockchain } from '../lib/logToBlockchain'
 import { runAgent } from '../lib/api'
-import { ArrowLeft, Play, Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react'
+import { ArrowLeft, Loader2, CheckCircle2, XCircle, Zap } from 'lucide-react'
 
 export default function CommandCenter() {
   const { id: projectId } = useParams()
@@ -26,10 +24,17 @@ export default function CommandCenter() {
     .sort((a, b) => Number(a.id) - Number(b.id));
 
   const currentIncident = projectIncidents[projectIncidents.length - 1]; // latest
-  const incidentId = currentIncident?.id;
-  const currentAiDecision = aiDecisions[incidentId];
-  const currentSafetyCheck = safetyChecks[incidentId];
-  const currentExecution = executions[incidentId];
+  // ai_decision.incidentId is a u64 FK → matches incident.id (numeric)
+  const currentAiDecision = aiDecisions[Number(currentIncident?.id)];
+  const currentSafetyCheck = safetyChecks[currentIncident?.id];
+  const currentExecution = executions[currentIncident?.id];
+
+  // ── DEBUG ────────────────────────────────────────────────────────────────────
+  console.log('[CC] projectIncidents:', projectIncidents);
+  console.log('[CC] currentIncident:', currentIncident, '→ id:', currentIncident?.id);
+  console.log('[CC] aiDecisions map keys:', Object.keys(aiDecisions));
+  console.log('[CC] currentAiDecision:', currentAiDecision);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Filter live agent events for this project (most recent 20)
   const projectAgentEvents = Object.values(agentEvents)
@@ -203,12 +208,12 @@ export default function CommandCenter() {
                 {[...projectAgentEvents].reverse().map(event => (
                   <div key={event.id} className="px-4 py-2 flex items-start gap-2">
                     <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${event.eventType === 'ACTION_BLOCKED' || event.eventType === 'ACTION_FAILED'
-                        ? 'bg-red-50 text-red-600'
-                        : event.eventType === 'INCIDENT_RESOLVED'
-                          ? 'bg-green-50 text-green-700'
-                          : event.eventType === 'AGENT_THINKING'
-                            ? 'bg-purple-50 text-purple-700'
-                            : 'bg-[#F5F5F5] text-[#737373]'
+                      ? 'bg-red-50 text-red-600'
+                      : event.eventType === 'INCIDENT_RESOLVED'
+                        ? 'bg-green-50 text-green-700'
+                        : event.eventType === 'AGENT_THINKING'
+                          ? 'bg-purple-50 text-purple-700'
+                          : 'bg-[#F5F5F5] text-[#737373]'
                       }`}>{(event.eventType || '').replace(/_/g, ' ')}</span>
                     <span className="text-[10px] text-[#737373] font-mono truncate">{event.incidentId}</span>
                   </div>

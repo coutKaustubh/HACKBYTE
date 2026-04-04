@@ -1,78 +1,133 @@
-import { AlertCircle, AlertTriangle, Info, Play, CheckCircle } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, CheckCircle, ShieldAlert, ShieldCheck, Zap } from 'lucide-react'
 
-export default function DiagnosisPanel({ incident, aiDecision, safetyCheck, execution, onStartExecution }) {
-  const severity = incident?.status === 'resolved' ? 'RESOLVED' : 'CRITICAL';
+const SEVERITY_STYLES = {
+  critical: 'bg-red-50 text-red-700 border-red-200',
+  high:     'bg-orange-50 text-orange-700 border-orange-200',
+  medium:   'bg-yellow-50 text-yellow-700 border-yellow-200',
+  low:      'bg-green-50 text-green-700 border-green-200',
+}
+
+export default function DiagnosisPanel({ incident, aiDecision, safetyCheck, execution }) {
+  const isResolved = incident?.status === 'resolved'
+
+  // analysis field is a JSON string packed by spacetime_tools.add_ai_decision
+  let parsed = {}
+  try { parsed = aiDecision?.analysis ? JSON.parse(aiDecision.analysis) : {} } catch {}
   
+  const errorType  = parsed.error_type  || null
+  const rootCause  = parsed.root_cause  || aiDecision?.command || null
+  const severity   = parsed.severity    || (isResolved ? 'low' : 'critical')
+  const numActions = parsed.num_actions ?? 0
+
+  // ── DEBUG ──────────────────────────────────────────────────────────────────
+  console.log('[DiagPanel] incident:', incident)
+  console.log('[DiagPanel] aiDecision raw:', aiDecision)
+  console.log('[DiagPanel] parsed:', parsed)
+  console.log('[DiagPanel] errorType:', errorType, 'rootCause:', rootCause)
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="bg-[#FFFFFF] border border-[#E5E5E5] h-full flex flex-col rounded-lg overflow-hidden relative">
-      <div className="p-4 border-b border-[#E5E5E5] bg-[#FAFAFA]/50">
-        <h2 className="text-sm font-semibold text-[#171717] uppercase tracking-wider">Diagnosis Panel</h2>
+    <div className="bg-white border border-[#E5E5E5] h-full flex flex-col rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-[#E5E5E5] bg-[#FAFAFA]">
+        <h2 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest">Diagnosis Panel</h2>
       </div>
-      
-      <div className="p-4 space-y-6 flex-1 overflow-y-auto">
+
+      <div className="p-4 space-y-5 flex-1 overflow-y-auto">
+
+        {/* STATUS */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-[#737373] uppercase tracking-wider flex items-center gap-1.5">
-            {severity === 'RESOLVED' ? <CheckCircle className="w-4 h-4 text-success" /> : <AlertTriangle className="w-4 h-4 text-error" />}
+          <h3 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest flex items-center gap-1.5">
+            {isResolved
+              ? <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+              : <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
             Status
           </h3>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-1 text-sm rounded border font-medium ${severity === 'RESOLVED' ? 'bg-success/10 text-success border-success/50' : 'bg-error/10 text-error border-error/50'}`}>
-              {severity}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2.5 py-1 text-xs rounded border font-bold uppercase tracking-widest ${isResolved ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+              {isResolved ? 'Resolved' : 'Critical'}
             </span>
+            {errorType && (
+              <span className="px-2 py-1 text-[10px] rounded border font-mono bg-[#F5F5F5] text-[#737373] border-[#E5E5E5]">
+                {errorType}
+              </span>
+            )}
+            {severity && !isResolved && (
+              <span className={`px-2 py-1 text-[10px] rounded border font-bold uppercase ${SEVERITY_STYLES[severity] || SEVERITY_STYLES.medium}`}>
+                {severity}
+              </span>
+            )}
           </div>
         </div>
 
+        {/* ROOT CAUSE */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-[#737373] uppercase tracking-wider flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-accent" />
+          <h3 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest flex items-center gap-1.5">
+            <Info className="w-3.5 h-3.5 text-blue-500" />
             Root Cause Analysis
           </h3>
-          <div className="bg-[#FAFAFA] rounded p-3 border border-[#E5E5E5] w-full min-h-[60px]">
-            <p className="text-sm text-[#171717]">
-              {!incident ? "Waiting for incident..." :
-               !aiDecision ? "AI is analyzing the incident..." :
-               aiDecision.analysis}
+          <div className="bg-[#FAFAFA] rounded-lg p-3 border border-[#E5E5E5] min-h-[60px]">
+            <p className="text-sm text-[#171717] leading-relaxed">
+              {!incident
+                ? 'Waiting for incident...'
+                : !aiDecision
+                ? 'AI is analyzing the incident...'
+                : rootCause || 'Analysis complete.'}
             </p>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-[#737373] uppercase tracking-wider flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 text-[#737373]" />
-            Suggested Action
-          </h3>
-          <ul className="space-y-2">
-            {!aiDecision ? (
-              <li className="text-sm text-[#737373]">No actions generated yet.</li>
-            ) : (
-              <li className="bg-[#FAFAFA] rounded p-3 border border-[#E5E5E5] text-sm text-[#171717] flex flex-col gap-2">
-                <div className="flex items-start gap-2">
-                   <span className="text-accent mt-0.5 font-mono text-xs">&gt;</span>
-                   <span className="font-mono text-xs font-semibold">{aiDecision.command}</span>
-                </div>
-                {safetyCheck && (
-                   <div className={`text-xs mt-1 ${safetyCheck.allowed ? 'text-success' : 'text-error'}`}>
-                     Safety Check: {safetyCheck.allowed ? 'PASSED ✅' : 'FAILED 🚫'} - {safetyCheck.reason}
-                   </div>
-                )}
-              </li>
-            )}
-          </ul>
-        </div>
+        {/* ACTIONS SUMMARY */}
+        {aiDecision && (
+          <div className="space-y-2">
+            <h3 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-[#737373]" />
+              Suggested Actions
+            </h3>
+            <div className="bg-[#FAFAFA] rounded-lg p-3 border border-[#E5E5E5]">
+              {numActions > 0 ? (
+                <p className="text-sm text-[#171717]">
+                  <span className="font-bold">{numActions}</span> action{numActions !== 1 ? 's' : ''} proposed by the AI agent.
+                </p>
+              ) : (
+                <p className="text-sm text-[#737373]">No actions generated yet.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SAFETY CHECK */}
+        {safetyCheck && (
+          <div className="space-y-2">
+            <h3 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest flex items-center gap-1.5">
+              {safetyCheck.allowed
+                ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+                : <ShieldAlert className="w-3.5 h-3.5 text-red-500" />}
+              Safety Check
+            </h3>
+            <div className={`rounded-lg p-3 border text-sm ${safetyCheck.allowed ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              <span className="font-bold">{safetyCheck.allowed ? '✅ ALLOWED' : '🚫 BLOCKED'}</span>
+              {safetyCheck.reason && (
+                <p className="text-xs mt-1 opacity-80">{safetyCheck.reason}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* EXECUTION */}
+        {execution && (
+          <div className="space-y-2">
+            <h3 className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-purple-500" />
+              Execution
+            </h3>
+            <div className={`rounded-lg p-3 border text-sm font-mono ${execution.status === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              {execution.status?.toUpperCase()} — {execution.action}
+            </div>
+          </div>
+        )}
+
       </div>
-      
-      {/* Execution Action Button */}
-      {safetyCheck?.allowed && (!execution || execution.status === 'failed') && severity !== 'RESOLVED' && (
-        <div className="p-4 border-t border-[#E5E5E5] bg-white">
-          <button 
-            onClick={onStartExecution}
-            className="w-full flex items-center justify-center gap-2 bg-[#171717] hover:bg-[#262626] text-white py-2 px-4 rounded text-sm font-medium transition-colors"
-          >
-            <Play className="w-4 h-4" />
-            Execute Command
-          </button>
-        </div>
-      )}
     </div>
   )
 }

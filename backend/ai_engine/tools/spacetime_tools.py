@@ -61,15 +61,22 @@ class SpacetimeTools:
 
     def add_ai_decision(self, project_id: int, incident_id: str, error_type: str,
                         root_cause: str, severity: str, num_actions: int):
-        """Write AI diagnosis result to ai_decision table."""
+        """Write AI diagnosis result to ai_decision table.
+        Schema: id, incidentId (u64 FK), analysis (string), command (string), confidence (f64)
+        We pack the full diagnosis into 'analysis' as JSON since the schema has no extra columns.
+        """
         print(f"[SpacetimeDB] add_ai_decision | incident={incident_id} | error={error_type}")
-        self._call("add_ai_decision", {
-            "project_id": project_id,
-            "incident_id": incident_id,
+        analysis_payload = json.dumps({
             "error_type": error_type,
             "root_cause": root_cause,
             "severity": severity,
             "num_actions": num_actions,
+        })
+        self._call("add_ai_decision", {
+            "incident_id": incident_id,
+            "analysis": analysis_payload,
+            "command": f"{error_type}: {root_cause[:120]}",
+            "confidence": 0.9,
         })
 
     def add_safety_check(self, project_id: int, incident_id: str, intent_id: str,
