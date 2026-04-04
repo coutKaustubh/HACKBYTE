@@ -1,9 +1,11 @@
+import { useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Terminal from '../components/Terminal'
 import DiagnosisPanel from '../components/DiagnosisPanel'
 import SQLMonitor from '../components/SQLMonitor'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
 import { ArrowLeft, Layout, Terminal as TermIcon, Shield, Activity } from 'lucide-react'
+import { logToBlockchain } from '../lib/logToBlockchain'
 
 export default function CommandCenter() {
   const { id: projectId } = useParams()
@@ -25,6 +27,36 @@ export default function CommandCenter() {
   const currentExecution = executions[incidentId];
 
   const overallStatus = currentIncident?.status === 'resolved' ? 'success' : 'error';
+
+  // ── Blockchain audit log: fires once when incident is resolved ──────────
+  const loggedIncidentRef = useRef(null);
+
+  useEffect(() => {
+    // Only fire when status is resolved and we haven't already logged this incident
+    if (overallStatus !== 'success') return;
+    if (!currentIncident?.id) return;
+    if (loggedIncidentRef.current === currentIncident.id) return;
+
+    loggedIncidentRef.current = currentIncident.id;
+
+    const payload = {
+      projectId: String(projectId),
+      incidentId: String(currentIncident.id),
+      status: 'PATCH_SUCCESSFUL',
+      patchedAt: new Date().toISOString(),
+      aiDecision: currentAiDecision ?? null,
+      safetyCheck: currentSafetyCheck ?? null,
+      execution: currentExecution ?? null,
+    };
+
+    logToBlockchain(String(projectId), payload)
+      .then(({ cid, txHash }) => {
+        console.log(`🎉 Audit log complete — CID: ${cid} | TX: ${txHash}`);
+      })
+      .catch((err) => {
+        console.error('❌ Blockchain log failed:', err.message);
+      });
+  }, [overallStatus, currentIncident?.id]);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col h-screen overflow-hidden">

@@ -1,245 +1,64 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import Navbar from '../components/Navbar'
-import AddProjectModal from '../components/AddProjectModal'
-import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
-import { fetchProjects, createProject as createProjectApi } from '../lib/api'
-import { Boxes, Activity, ArrowRight, Plus } from 'lucide-react'
+import ProjectCard from '../components/ProjectCard'
+import { useNavigate } from 'react-router-dom'
 
-/** Decode a JWT payload without verifying the signature. */
-function decodeJwtPayload(token) {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    return JSON.parse(atob(base64))
-  } catch {
-    return {}
-  }
-}
-
-/**
- * Call a SpacetimeDB reducer directly via HTTP.
- * Args must be a JSON array matching the reducer's positional parameters.
- * u64 fields → pass as JS Number (the HTTP API accepts numeric literals).
- */
-async function callStdbReducer(reducerName, args) {
-  const url = `http://127.0.0.1:3000/v1/database/realitypatch-db-2lsay/call/${reducerName}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.status);
-    throw new Error(`SpacetimeDB ${reducerName} failed: ${text}`);
-  }
-  return res;
-}
+const DUMMY_PROJECTS = [
+  { id: 'proj_1', name: 'api-gateway', lastActivity: '2 mins ago' },
+  { id: 'proj_2', name: 'auth-service', lastActivity: '5 hours ago' },
+  { id: 'proj_3', name: 'billing-worker', lastActivity: '1 day ago' },
+  { id: 'proj_4', name: 'frontend-dashboard', lastActivity: '3 days ago' },
+]
 
 export default function Dashboard() {
-  const { projects, incidents, isConnected, createProject: createProjectStdb } = useSpacetimeDB();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [djangoProjects, setDjangoProjects] = useState(null);
-  const [projectsLoadError, setProjectsLoadError] = useState(null);
-
-  const refreshDjangoProjects = useCallback(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setDjangoProjects(null);
-      return;
-    }
-    setProjectsLoadError(null);
-    fetchProjects(token)
-      .then(setDjangoProjects)
-      .catch((err) => {
-        setProjectsLoadError(err.message || 'Failed to load projects');
-        setDjangoProjects([]);
-      });
-  }, []);
+  const navigate = useNavigate();
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    refreshDjangoProjects();
-  }, [refreshDjangoProjects]);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/');
+      return;
+    }
 
-  const useDjangoList = localStorage.getItem('token') != null && djangoProjects != null;
-  const projectList = useDjangoList ? djangoProjects : Object.values(projects);
-  const incidentList = Object.values(incidents);
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
 
-  const activeIncidentsCount = incidentList.filter(inc => inc.status === 'error').length;
+      const decoded = JSON.parse(jsonPayload);
+      setUserName(decoded.name || decoded.username || decoded.email || 'User');
+    } catch (e) {
+      console.error("Failed to decode JWT:", e);
+      setUserName('User');
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
-      <Navbar showLogout={true} />
-
-      {!isConnected && (
-        <div className="bg-error/10 text-error border-b border-error/20 px-4 py-2 text-center text-[10px] font-bold uppercase tracking-widest">
-          Offline: Reconnecting to SpacetimeDB...
-        </div>
-      )}
+      <Navbar showLogout={true} onLogout={handleLogout} />
 
       <main className="flex-1 p-8 max-w-6xl mx-auto w-full">
-        {/* Hero Section */}
-        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-[#171717] flex items-center justify-center shadow-lg">
-                <Boxes className="w-6 h-6 text-white" />
-              </div>
-              <h1 className="text-3xl font-black text-[#171717] tracking-tight">Control Center</h1>
-            </div>
-            <p className="text-[#737373] max-w-md text-sm font-medium">
-              Manage your autonomous monitoring agents across multiple clusters.
-            </p>
-          </div>
-
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3 bg-[#171717] hover:bg-[#262626] text-white rounded-xl shadow-lg font-bold text-xs uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-5 h-5" /> New Project
-          </button>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Active Projects</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-[#171717]">{projectList.length}</span>
-              <span className="text-xs font-bold text-success bg-success/10 px-2 py-0.5 rounded-full">Online</span>
-            </div>
-          </div>
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Live Incidents</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-[#171717]">{activeIncidentsCount}</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeIncidentsCount > 0 ? 'bg-error/10 text-error' : 'bg-success/10 text-success'}`}>
-                {activeIncidentsCount > 0 ? 'Critical' : 'Nominal'}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Fleet Health</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-[#171717]">99.8</span>
-              <span className="text-xs font-bold text-[#737373] bg-[#F5F5F5] px-2 py-0.5 rounded-full">% SLA</span>
-            </div>
+            <h1 className="text-3xl font-bold text-[#171717] mb-1">Hello, {userName}</h1>
+            <p className="text-[#737373]">Here are your active projects.</p>
           </div>
         </div>
 
-        {/* Project Grid */}
-        <div className="flex items-center gap-4 mb-8">
-          <h2 className="text-xl font-bold text-[#171717] shrink-0">Your Fleet</h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-[#E5E5E5] to-transparent" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+          {DUMMY_PROJECTS.map(project => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
         </div>
-
-        {projectsLoadError && (
-          <div className="mb-6 rounded-xl border border-error/30 bg-error/5 px-4 py-3 text-sm text-error">
-            {projectsLoadError}
-          </div>
-        )}
-
-        {projectList.length === 0 && (isConnected || useDjangoList) ? (
-          <div className="text-center py-24 bg-white border border-dashed border-[#E5E5E5] rounded-[2rem]">
-            <Boxes className="w-16 h-16 text-[#E5E5E5] mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-[#737373]">No Projects Configured</h3>
-            <p className="text-sm text-[#A3A3A3] mt-2">Initialize your first service monitor to begin deployment.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {projectList.map(project => {
-              const projectIncidents = incidentList.filter(inc => String(inc.project_id) === String(project.id));
-              const hasAlert = projectIncidents.some(inc => inc.status === 'error');
-
-              return (
-                <Link
-                  key={project.id}
-                  to={`/project/${project.id}`}
-                  className="group bg-white border border-[#E5E5E5] rounded-[2rem] p-8 shadow-sm hover:shadow-2xl transition-all hover:-translate-y-1 hover:border-[#171717] flex flex-col relative overflow-hidden"
-                >
-                  {hasAlert && (
-                    <div className="absolute top-6 right-6">
-                      <div className="w-3 h-3 rounded-full bg-error shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse" />
-                    </div>
-                  )}
-
-                  <div className="mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-[#F5F5F5] group-hover:bg-[#171717] flex items-center justify-center transition-all duration-300 mb-6 group-hover:rotate-[10deg]">
-                      <Activity className="w-6 h-6 text-[#737373] group-hover:text-white" />
-                    </div>
-                    <h3 className="text-2xl font-black text-[#171717] leading-tight mb-2">{project.name}</h3>
-                    <p className="text-sm text-[#737373] line-clamp-2 leading-relaxed font-medium">
-                      {project.description}
-                    </p>
-                  </div>
-
-                  <div className="mt-auto pt-6 flex items-center justify-between border-t border-[#F5F5F5]">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-[#A3A3A3] uppercase tracking-widest mb-1">State Log</span>
-                      <span className="text-sm font-bold text-[#171717]">{projectIncidents.length} Records</span>
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-[#FAFAFA] group-hover:bg-[#171717] group-hover:text-white transition-all flex items-center justify-center">
-                      <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
       </main>
-
-      <AddProjectModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={async (data) => {
-          const token = localStorage.getItem('token');
-          if (!token) {
-            window.alert('Sign in first so your project can be saved to your account.');
-            return;
-          }
-
-          try {
-            // 1️⃣ Save to Postgres via Django API
-            const created = await createProjectApi(token, data);
-            console.log('[Django] Created project:', created);
-
-            // Refresh the list from Django right away
-            refreshDjangoProjects();
-            setIsModalOpen(false);
-
-            // 2️⃣ Mirror into SpacetimeDB via direct HTTP call
-            // (avoids BigInt/SDK serialization issues entirely)
-            try {
-              const payload = decodeJwtPayload(token);
-              // Map JWT user id → number (fallback 1)
-              const userId = parseInt(String(payload.user_id ?? payload.sub ?? '1'), 10) || 1;
-              // Map returned project id → number (fallback 0)
-              const projectId = parseInt(String(created?.id ?? created?.pk ?? '0'), 10) || 0;
-
-              console.log('[STDB HTTP] Calling create_project →', { userId, projectId, name: data.name });
-
-              // Args order must match the reducer definition:
-              // (user_id u64, django_project_id u64, name, description, ssh_key, server_ip, root_directory, deploy_commands)
-              await callStdbReducer('create_project', [
-                userId,
-                projectId,
-                data.name || '',
-                data.description || '',
-                data.sshKey || '',
-                data.serverIp || '',
-                data.rootDirectory || '',
-                data.userDeployCommands || 'npm install && npm run build && npm start',
-              ]);
-              console.log('[STDB HTTP] create_project ✓');
-            } catch (stdbErr) {
-              console.warn('[STDB HTTP] Mirror failed (non-fatal):', stdbErr.message);
-            }
-          } catch (err) {
-            console.error('[Project create error]', err);
-            window.alert(err.message || 'Could not create project');
-          }
-        }}
-      />
     </div>
   )
 }
