@@ -8,26 +8,56 @@ load_dotenv()
 # ── Local policy definition ───────────────────────────────────────
 # These mirror what you configure on platform.armoriq.ai
 POLICIES = {
-    "allow": [
+    "safe": [
+        "list_directory",
+        "read_file",
+        "read_file_with_lines",
+        "grep_in_file",
+        "grep_in_project",
+        "inspect_db",
+        "tail_logs",
+        "grep_logs",
+        "pm2_list",
+        "npm_list",
+        "read_logs",
+    ],
+    "controlled": [
+        "pm2_start",
+        "npm_install",
+        "install_modules",
+        "build_app",
+        "file_edit",
         "restart_service",
         "edit_config",
         "rollback_deploy",
         "redeploy_app",
-        "read_logs",
-        "read_file",
-        "write_file"
+        "write_file",
+        "patch_code_file",
+        "fix_import_path",
+        "create_model_file",
+        "rename_file",
+        "kill_process",
+        "fix_missing_module",
+        "install_dependency",
+        "db_query",
     ],
     "deny": [
         "drop_table",           # DEMO: always blocked
         "delete_database",      # DEMO: always blocked
         "exec_arbitrary",       # DEMO: always blocked
-        "rm_rf"
+        "rm_rf",
+        "truncate_db",
+        "format_disk",
+        "rm -rf /"
     ],
     "deny_rules": {
         "drop_table":      ("P-001", "Destructive irreversible operation denied in production"),
         "delete_database": ("P-002", "Database deletion requires manual approval — not autonomous"),
         "exec_arbitrary":  ("P-003", "Arbitrary command execution outside approved action set"),
-        "rm_rf":           ("P-004", "Filesystem deletion is permanently blocked")
+        "rm_rf":           ("P-004", "Filesystem deletion is permanently blocked"),
+        "truncate_db":     ("P-005", "Destructive DB operation blocked"),
+        "format_disk":     ("P-006", "Destructive disk operation blocked"),
+        "rm -rf /":        ("P-007", "Filesystem deletion is permanently blocked")
     }
 }
 
@@ -57,7 +87,14 @@ class ArmorTools:
                 token=None
             )
 
-        if intent.action not in POLICIES["allow"]:
+        # 3-Tier Policy Logic
+        if intent.action in POLICIES["safe"]:
+            # Always allowed
+            pass
+        elif intent.action in POLICIES["controlled"]:
+            # Allowed with limits (placeholders for limit checks)
+            pass
+        else:
             return EnforcementResult(
                 intent_id=intent.intent_id,
                 action=intent.action,

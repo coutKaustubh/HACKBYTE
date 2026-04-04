@@ -10,22 +10,37 @@ class Intent(BaseModel):
     
     # the action — ArmorClaw checks this against policies
     action: Literal[
-        "restart_service",
-        "edit_config",
-        "rollback_deploy",
-        "redeploy_app",
+        # ── Observation (always safe) ─────────────────────────────
         "read_logs",
         "read_file",
-        "write_file",
+        "read_file_with_lines",
         "list_directory",
-        "rename_file",
-        "kill_process",
-        "fix_missing_module",
-        "fix_import_path",
+        "grep_in_file",
+        "grep_in_project",
+        "inspect_db",
+        "db_query",
+        # ── Code editing ─────────────────────────────────────────
+        "patch_code_file",
+        "write_file",
         "create_model_file",
-        "drop_table",        # will always be BLOCKED — demo purpose
-        "delete_database",   # will always be BLOCKED
-        "exec_arbitrary"     # will always be BLOCKED
+        "fix_import_path",
+        "fix_missing_module",
+        # ── Build & dependency management ────────────────────────
+        "install_modules",           # npm install / yarn install
+        "build_app",                 # npm run build
+        # ── Process management ───────────────────────────────────
+        "restart_service",
+        "pm2_start",
+        "kill_process",
+        # ── Config / deploy ──────────────────────────────────────
+        "edit_config",
+        "rename_file",
+        "rollback_deploy",
+        "redeploy_app",
+        # ── Always BLOCKED (demo guardrails) ─────────────────────
+        "drop_table",
+        "delete_database",
+        "exec_arbitrary",
     ]
     
     target: str              # service name or file path
