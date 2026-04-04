@@ -1,11 +1,12 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from graph import agent
 import os
 import uuid
 import asyncio
 import time
-from tools.vm_tools import VMTools
+from tools.vm_tools import VMTools, SSHNotConnectedError
 from starlette.concurrency import run_in_threadpool
 
 app = FastAPI()
@@ -20,9 +21,11 @@ async def start_polling():
 
 async def poll_vultr_logs():
     global last_execution_time, last_error_signature, polling_interval
-    vm = VMTools()
-    if not vm.use_ssh:
-        print("[Polling] USE_SSH is false. Continuous monitoring on Vultr disabled.")
+    try:
+        vm = VMTools()  # raises SSHNotConnectedError if SSH fails
+    except SSHNotConnectedError as e:
+        print(f"\n🚨 [Polling] FATAL — {e}")
+        print("[Polling] Monitoring disabled. Fix SSH config in .env and restart.")
         return
 
     print("[Polling] Started background monitor for Vultr server logs (journalctl)...")
@@ -73,6 +76,9 @@ class TriggerRequest(BaseModel):
     source: str
     service_hint: str = None
 
+class BuildRequest(BaseModel):
+    commands: str = None
+
 @app.post("/trigger-incident")
 def trigger_incident(req: TriggerRequest):
     """
@@ -89,6 +95,47 @@ def trigger_incident(req: TriggerRequest):
 
     # run the full LangGraph pipeline
     result = agent.invoke(initial_state)
+
+    return {
+        "incident_id": incident_id,
+        "status": "completed",
+        "resolved": result.get("incident_resolved"),
+        "summary": result.get("final_summary")
+    }
+
+@app.post("/run-build")
+async def run_build(req: BuildRequest):
+    """
+    Executes specified deployment commands, saving logs to a temporary file.
+    Feeds the logs to the AI Agent to detect issues and remediate, then cleans up.
+    """
+    try:
+        vm = VMTools()
+    except SSHNotConnectedError as e:
+        return JSONResponse(status_code=503, content={"error": str(e)})
+
+    cmd = req.commands or os.getenv("USER_DEPLOY_COMMANDS", "npm install && npm run build > logs/build.log 2>&1 && npm start")
+    full_cmd = f"cd {vm.project_root} && mkdir -p logs && {cmd}"
+    print(f"[BuildHook] Executing: {full_cmd}")
+    vm._run(full_cmd)
+
+    extracted_logs = vm.read_file("logs/build.log")
+    if not extracted_logs.strip() or "No such file" in extracted_logs:
+        extracted_logs = "[BuildHook] logs/build.log was empty or not found after running commands."
+
+    incident_id = f"inc-{uuid.uuid4().hex[:8]}"
+    initial_state = {
+        "incident_id": incident_id,
+        "source": "user_build_script",
+        "service_hint": "build",
+        "custom_logs": extracted_logs
+    }
+
+    print(f"[BuildHook] Feeding logs to Agent ({incident_id})")
+    result = await run_in_threadpool(agent.invoke, initial_state)
+
+    vm._run(f"cd {vm.project_root} && rm -f logs/build.log")
+    print(f"[BuildHook] Cleaned up temporary logs/build.log")
 
     return {
         "incident_id": incident_id,

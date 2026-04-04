@@ -16,7 +16,7 @@ def enforce_node(state: dict) -> dict:
         if result.decision == "BLOCKED":
             # THIS IS THE DEMO MOMENT
             # Divyansh flashes red, Sharad triggers ElevenLabs voice
-            st.emit("ACTION_BLOCKED", incident_id, {
+            print("ACTION_BLOCKED", incident_id, {
                 "intent_id": result.intent_id,
                 "action": result.action,
                 "policy": result.policy_matched,
@@ -25,7 +25,7 @@ def enforce_node(state: dict) -> dict:
                 "speak": f"Action {result.action} was blocked. Reason: {result.reason}"
             })
         else:
-            st.emit("ACTION_ALLOWED", incident_id, {
+            print("ACTION_ALLOWED", incident_id, {
                 "intent_id": result.intent_id,
                 "action": result.action,
                 "policy": result.policy_matched
