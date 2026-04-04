@@ -59,6 +59,59 @@ export default function Dashboard() {
           ))}
         </div>
       </main>
+
+      <AddProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={async (data) => {
+          const token = localStorage.getItem('token');
+          if (!token) {
+            window.alert('Sign in first so your project can be saved to your account.');
+            return;
+          }
+
+          try {
+            // 1️⃣ Save to Postgres via Django API
+            const created = await createProjectApi(token, data);
+            console.log('[Django] Created project:', created);
+
+            // Refresh the list from Django right away
+            refreshDjangoProjects();
+            setIsModalOpen(false);
+
+            // 2️⃣ Mirror into SpacetimeDB via direct HTTP call
+            // (avoids BigInt/SDK serialization issues entirely)
+            try {
+              const payload = decodeJwtPayload(token);
+              // Map JWT user id → number (fallback 1)
+              const userId = parseInt(String(payload.user_id ?? payload.sub ?? '1'), 10) || 1;
+              // Map returned project id → number (fallback 0)
+              const projectId = parseInt(String(created?.id ?? created?.pk ?? '0'), 10) || 0;
+
+              console.log('[STDB HTTP] Calling create_project →', { userId, projectId, name: data.name });
+
+              // Args order must match the reducer definition:
+              // (user_id u64, django_project_id u64, name, description, ssh_key, server_ip, root_directory, deploy_commands)
+              await callStdbReducer('create_project', {
+                user_id: userId,
+                django_project_id: projectId,
+                name: data.name || '',
+                description: data.description || '',
+                ssh_key: data.sshKey || '',
+                server_ip: data.serverIp || '',
+                root_directory: data.rootDirectory || '',
+                deploy_commands: data.userDeployCommands || 'npm install && npm run build && npm start',
+              });
+              console.log('[STDB HTTP] create_project ✓');
+            } catch (stdbErr) {
+              console.warn('[STDB HTTP] Mirror failed (non-fatal):', stdbErr.message);
+            }
+          } catch (err) {
+            console.error('[Project create error]', err);
+            window.alert(err.message || 'Could not create project');
+          }
+        }}
+      />
     </div>
   )
 }

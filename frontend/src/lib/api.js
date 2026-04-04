@@ -58,3 +58,22 @@ export async function createProject(accessToken, payload) {
   if (!res.ok) throw new Error(await parseErrorResponse(res))
   return res.json()
 }
+
+/**
+ * Trigger the AI engine agent for a specific project.
+ * Django will forward to the AI engine with the correct project_id.
+ * Returns { incident_id, project_id, status, resolved, summary }
+ */
+export async function runAgent(accessToken, projectId, { source = 'frontend_trigger', serviceHint = null } = {}) {
+  const res = await fetch(apiUrl(`/api/user-projects/${projectId}/run-agent/`), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ source, service_hint: serviceHint }),
+  })
+  if (!res.ok) throw new Error(await parseErrorResponse(res))
+  return res.json()
+}

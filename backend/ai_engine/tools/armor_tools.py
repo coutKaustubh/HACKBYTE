@@ -1,9 +1,11 @@
 import os
 import httpx
+from pathlib import Path
 from models.intent import Intent, EnforcementResult
 from dotenv import load_dotenv
 
-load_dotenv()
+_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV)
 
 # ── Local policy definition ───────────────────────────────────────
 # These mirror what you configure on platform.armoriq.ai

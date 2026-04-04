@@ -109,6 +109,11 @@ class TriggerRequest(BaseModel):
     source:       str
     service_hint: str = None
 
+class RunProjectRequest(BaseModel):
+    project_id: int          # Django Postgres PK — used to correlate SpacetimeDB events
+    source: str = "frontend_trigger"
+    service_hint: str = None
+
 class BuildRequest(BaseModel):
     commands: str = None
 
@@ -203,6 +208,31 @@ def trigger_incident(req: TriggerRequest):
         "status":      "completed",
         "resolved":    result.get("incident_resolved"),
         "summary":     result.get("final_summary"),
+    }
+
+@app.post("/run-project")
+def run_project(req: RunProjectRequest):
+    """
+    Called by Django when the frontend triggers an agent run for a specific project.
+    Injects project_id into the initial state so every SpacetimeDB event is correlated.
+    """
+    incident_id = f"inc-{uuid.uuid4().hex[:8]}"
+
+    initial_state = {
+        "incident_id": incident_id,
+        "project_id": req.project_id,
+        "source": req.source,
+        "service_hint": req.service_hint,
+    }
+
+    result = agent.invoke(initial_state)
+
+    return {
+        "incident_id": incident_id,
+        "project_id": req.project_id,
+        "status": "completed",
+        "resolved": result.get("incident_resolved"),
+        "summary": result.get("final_summary")
     }
 
 
