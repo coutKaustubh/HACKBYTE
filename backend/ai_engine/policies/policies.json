@@ -4,18 +4,39 @@
     "edit_config",
     "rollback_deploy",
     "read_logs",
-    "read_file"
+    "read_file",
+    "read_file_with_lines",
+    "list_directory",
+    "grep_in_file",
+    "grep_in_project",
+    "inspect_db",
+    "db_query",
+    "patch_code_file",
+    "write_file",
+    "create_model_file",
+    "fix_import_path",
+    "fix_missing_module",
+    "install_modules",
+    "build_app",
+    "pm2_start",
+    "kill_process",
+    "rename_file",
+    "redeploy_app"
   ],
   "deny": [
     "drop_table",
     "delete_database",
     "exec_arbitrary",
-    "rm_rf"
+    "rm_rf",
+    "truncate_db",
+    "format_disk"
   ],
   "deny_rules": {
-    "drop_table": ["P-001", "Destructive irreversible operation denied in production"],
+    "drop_table":      ["P-001", "Destructive irreversible operation denied in production"],
     "delete_database": ["P-002", "Database deletion requires manual approval — not autonomous"],
-    "exec_arbitrary": ["P-003", "Arbitrary command execution outside approved action set"],
-    "rm_rf": ["P-004", "Filesystem deletion is permanently blocked"]
+    "exec_arbitrary":  ["P-003", "Arbitrary command execution outside approved action set"],
+    "rm_rf":           ["P-004", "Filesystem deletion is permanently blocked"],
+    "truncate_db":     ["P-005", "Destructive DB operation blocked"],
+    "format_disk":     ["P-006", "Destructive disk operation blocked"]
   }
 }

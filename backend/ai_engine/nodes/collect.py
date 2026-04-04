@@ -1,32 +1,39 @@
-from tools.vm_tools import VMTools
+from tools.vm_tools      import VMTools
 from tools.spacetime_tools import SpacetimeTools
-from tools.log_tools import fetch_deploy_logs
+from tools.log_tools     import fetch_deploy_logs
+from utils.logger        import log_incident_started, log_logs_collected
+from utils.project_tree  import tree_cache
 
 vm = VMTools()
 st = SpacetimeTools()
 
+
 def collect_node(state: dict) -> dict:
-    incident_id = state["incident_id"]
+    incident_id  = state["incident_id"]
     service_hint = state.get("service_hint")
 
-    print("INCIDENT_STARTED", incident_id, {"source": state["source"]})
+    log_incident_started(incident_id, state["source"])
 
-    # collect system snapshot (includes pm2_status now)
+    # System snapshot (includes pm2_status)
     snapshot = vm.get_system_snapshot()
     configs  = vm.get_config_files()
 
-    # ── Primary: Pull PM2 logs (the real app logs) ─────────────────
-    pm2_logs = vm._run("pm2 logs --nostream --lines 100 2>/dev/null || pm2 logs --lines 100 2>&1 | head -200")
+    # ── Project file tree (cached — SSH only on miss/stale) ──────────────────
+    # This is injected into Gemini prompts so AI references REAL paths only.
+    project_tree = tree_cache.get(vm)
+
+    # ── Primary: PM2 logs and status ──────────────────────────────────────────
+    pm2_logs        = vm._run("pm2 logs --nostream --lines 100 2>/dev/null || pm2 logs --lines 100 2>&1 | head -200")
     pm2_status_full = vm._run("pm2 status --no-color 2>/dev/null")
 
     logs = f"=== PM2 Status ===\n{pm2_status_full}\n\n=== PM2 App Logs (last 100 lines) ===\n{pm2_logs}"
 
-    # ── Secondary: systemd service logs if a specific service is hinted ──
+    # ── Secondary: systemd service logs if a specific service is hinted ───────
     if service_hint and service_hint not in ("auto-detected", "build"):
         svc_logs = vm.read_service_logs(service_hint, lines=100)
         logs += f"\n\n=== {service_hint} (journalctl) ===\n{svc_logs}"
 
-    # ── External log source (Logtail / Axiom etc.) ──────────────────
+    # ── External log source (Logtail / Axiom etc.) ────────────────────────────
     external = fetch_deploy_logs()
     if external:
         logs = (
@@ -35,7 +42,7 @@ def collect_node(state: dict) -> dict:
             f"{logs}"
         )
 
-    # ── Custom logs from /run-build endpoint ────────────────────────
+    # ── Custom logs from /run-build endpoint ──────────────────────────────────
     custom_logs = state.get("custom_logs", "")
     if custom_logs:
         logs = (
@@ -44,15 +51,17 @@ def collect_node(state: dict) -> dict:
             f"{logs}"
         )
 
-    print("LOGS_COLLECTED", incident_id, {
-        "log_length": len(logs),
-        "pm2_status_snippet": pm2_status_full[:120].replace("\n", " "),
-        "failed_services": snapshot.get("failed_services", "")
-    })
+    log_logs_collected(
+        incident_id,
+        log_length=len(logs),
+        pm2_snippet=pm2_status_full[:120].replace("\n", " "),
+        failed_services=snapshot.get("failed_services", ""),
+    )
 
     return {
         **state,
-        "raw_logs": logs,
+        "raw_logs":       logs,
         "system_snapshot": snapshot,
-        "config_files": configs
+        "config_files":   configs,
+        "project_tree":   project_tree,   # ← injected into Gemini prompts
     }
