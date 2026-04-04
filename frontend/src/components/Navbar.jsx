@@ -5,7 +5,7 @@ export default function Navbar({ projectName, showLogout, onLogout }) {
   return (
     <nav className="h-14 border-b border-[#E5E5E5] bg-[#FFFFFF]/50 flex items-center px-6 justify-between">
       <Link to="/dashboard" className="flex items-center gap-2">
-        <Activity className="w-5 h-5 text-accent" />
+        <img src="/Xone.png" alt="XOne Logo" className="w-6 h-6 object-contain" />
         <span className="font-semibold text-[#171717]">XOne</span>
       </Link>
       
