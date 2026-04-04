@@ -18,8 +18,11 @@ class SpacetimeTools:
             payload=payload
         )
         try:
-            # print(f"Mock SpacetimeDB Emit: {event_type} - {incident_id}")
-            pass
+            # Print to console so the user can see what's happening without the frontend
+            print(f"[{event_type}] {incident_id}")
+            if event_type in ("ACTION_EXECUTED", "INCIDENT_RESOLVED", "ACTION_BLOCKED", "ACTION_ALLOWED", "PLAN_READY"):
+                print(f"Data: {payload}\n")
+            
             # httpx.post(
             #     f"{self.url}/database/call/emit_event",
             #     headers={"Authorization": f"Bearer {self.token}"},
