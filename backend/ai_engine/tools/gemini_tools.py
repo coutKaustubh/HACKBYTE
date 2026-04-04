@@ -10,6 +10,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 DIAGNOSIS_PROMPT = """
 You are a senior Site Reliability Engineer.
 Analyze the logs, system snapshot, and config below.
+Your target environment is a PaaS (like Railway). Fixes should be made by editing the local codebase.
 Return ONLY valid JSON — no markdown, no explanation, just the JSON object.
 
 JSON structure:
@@ -20,9 +21,9 @@ JSON structure:
   "affected_service": "service name",
   "actions": [
     {{
-      "action": "restart_service|edit_config|rollback_deploy|read_logs|read_file",
+      "action": "redeploy_app|write_file|read_file|restart_service|edit_config|rollback_deploy|read_logs",
       "target": "exact service name or file path",
-      "params": {{}},
+      "params": {{"content": "for write_file", "message": "for redeploy_app"}},
       "reason": "why this fixes the root cause",
       "risk_level": "low|medium|high|critical",
       "reversible": true or false,
@@ -72,7 +73,9 @@ class GeminiTools:
             }
 
     def stream_diagnose(self, logs: str, snapshot: dict, on_token):
-        """WOW FACTOR — streams reasoning token by token, calls on_token(chunk)"""
+        """WOW FACTOR — streams reasoning token by token, calls on_token(chunk)
+        NOTE: Modified to fake the stream locally to bypass a known StopIteration bug 
+        in the deprecated google.generativeai python SDK with the 2.5-flash model."""
         prompt = f"""
         You are an SRE diagnosing a production incident.
         Think step by step out loud, then give your final recommendation.
@@ -80,10 +83,17 @@ class GeminiTools:
         LOGS: {logs[:4000]}
         SNAPSHOT: {json.dumps(snapshot)[:2000]}
         """
-        response = self.model.generate_content(prompt, stream=True)
-        full = ""
-        for chunk in response:
-            text = chunk.text
-            full += text
-            on_token(text)   # caller pushes this to SpacetimeDB live
-        return full
+        try:
+            # Drop stream=True to avoid the gRPC StopIteration crash
+            response = self.model.generate_content(prompt)
+            full = response.text
+            
+            # Fake the streaming effect for the UI
+            import time
+            for word in full.split(" "):
+                on_token(word + " ")
+            return full
+        except Exception as e:
+            err = f"Failed to diagnose: {e}"
+            on_token(err)
+            return err

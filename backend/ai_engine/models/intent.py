@@ -13,8 +13,10 @@ class Intent(BaseModel):
         "restart_service",
         "edit_config",
         "rollback_deploy",
+        "redeploy_app",
         "read_logs",
         "read_file",
+        "write_file",
         "drop_table",        # will always be BLOCKED — demo purpose
         "delete_database",   # will always be BLOCKED
         "exec_arbitrary"     # will always be BLOCKED

@@ -27,8 +27,17 @@ class VMTools:
                 self.use_ssh = False
                 self.client = None
 
-        base = os.getenv("RENDER_URL", "https://your-app.onrender.com").rstrip("/")
-        self.render_url = base
+        # Public URL for /health checks: explicit env, or Railway auto domain
+        base = (
+            os.getenv("RENDER_URL")
+            or os.getenv("PUBLIC_APP_URL")
+            or (
+                f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN').rstrip('/')}"
+                if os.getenv("RAILWAY_PUBLIC_DOMAIN")
+                else ""
+            )
+        )
+        self.render_url = (base or "https://your-app.onrender.com").rstrip("/")
 
         print(f"[VMTools] Running in {'SSH' if self.use_ssh else 'SIMULATION'} mode")
 
@@ -100,7 +109,26 @@ class VMTools:
         return self._run(f"journalctl -u {service} -n {lines} --no-pager 2>&1")
 
     def read_file(self, path: str) -> str:
-        return self._run(f"cat {path} 2>&1")
+        # Instead of bash cat, actually read the file natively for Windows support
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            return self._run(f"cat {path} 2>&1")
+
+    def write_file(self, path: str, content: str) -> dict:
+        # Allows AI to completely overwrite a file locally
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            return {
+                "action": "write_file",
+                "target": path,
+                "status": "SUCCESS",
+                "output": "File written locally."
+            }
+        except Exception as e:
+            return {"status": "FAILED", "output": str(e)}
 
     def check_service_status(self, service: str) -> str:
         return self._run(f"systemctl status {service} --no-pager 2>&1")
@@ -173,14 +201,28 @@ class VMTools:
             "output": out,
         }
 
+    def redeploy_app(self, message: str = "Automated autonomous AI patch") -> dict:
+        import subprocess
+        try:
+            # Assumes Uvicorn is running in repo workspace
+            cmd = f'git add . && git commit -m "{message}" && git push'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.returncode == 0 or "nothing to commit" in result.stdout:
+                return {"action": "redeploy_app", "target": "git", "status": "SUCCESS", "output": result.stdout}
+            return {"action": "redeploy_app", "target": "git", "status": "FAILED", "output": result.stderr or result.stdout}
+        except Exception as e:
+            return {"action": "redeploy_app", "target": "git", "status": "FAILED", "output": str(e)}
+
     def dispatch(self, action: str, target: str, params: dict) -> dict:
         """Single entry point — called by execute node after ArmorClaw approval"""
         dispatch_map = {
             "restart_service": lambda: self.restart_service(target),
             "edit_config": lambda: self.edit_config(target, params),
             "rollback_deploy": lambda: self.rollback_deploy(target),
+            "redeploy_app": lambda: self.redeploy_app(params.get("message", "AI Patch")),
             "read_logs": lambda: {"output": self.read_service_logs(target)},
             "read_file": lambda: {"output": self.read_file(target)},
+            "write_file": lambda: self.write_file(target, params.get("content", "")),
         }
         fn = dispatch_map.get(action)
         if not fn:

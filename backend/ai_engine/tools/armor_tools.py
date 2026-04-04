@@ -1,5 +1,4 @@
 import os
-import json
 import httpx
 from models.intent import Intent, EnforcementResult
 from dotenv import load_dotenv
@@ -13,8 +12,10 @@ POLICIES = {
         "restart_service",
         "edit_config",
         "rollback_deploy",
+        "redeploy_app",
         "read_logs",
-        "read_file"
+        "read_file",
+        "write_file"
     ],
     "deny": [
         "drop_table",           # DEMO: always blocked
@@ -33,8 +34,6 @@ POLICIES = {
 class ArmorTools:
     def __init__(self):
         self.api_key = os.getenv("ARMORIQ_API_KEY")
-        self.agent_id = os.getenv("ARMORIQ_AGENT_ID")
-        self.user_id = os.getenv("ARMORIQ_USER_ID")
         self.base_url = "https://api.armoriq.ai"   # update if different
 
     def check_intent(self, intent: Intent) -> EnforcementResult:
@@ -84,11 +83,7 @@ class ArmorTools:
             response = httpx.post(
                 f"{self.base_url}/v1/verify",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "agent_id": self.agent_id,
-                    "user_id": self.user_id,
-                    "intent": intent.dict()
-                },
+                json={"intent": intent.model_dump() if hasattr(intent, "model_dump") else intent.dict()},
                 timeout=5.0
             )
             data = response.json()

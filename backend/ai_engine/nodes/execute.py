@@ -1,13 +1,37 @@
+import os
+
+from dotenv import load_dotenv
 from tools.vm_tools import VMTools
 from tools.spacetime_tools import SpacetimeTools
 
+load_dotenv()
+
 vm = VMTools()
 st = SpacetimeTools()
+
+
+def _agent_execute_enabled() -> bool:
+    return os.getenv("AGENT_EXECUTE_ACTIONS", "true").lower() == "true"
+
 
 def execute_node(state: dict) -> dict:
     incident_id = state["incident_id"]
     execution_results = []
     all_success = True
+
+    if not _agent_execute_enabled():
+        summary = build_summary(state, [])
+        summary["skipped_execute"] = True
+        summary["summary"] = (
+            f"{summary['summary']} (Execute skipped: AGENT_EXECUTE_ACTIONS=false)"
+        )
+        st.emit("INCIDENT_RESOLVED", incident_id, summary)
+        return {
+            **state,
+            "execution_results": [],
+            "incident_resolved": False,
+            "final_summary": summary["summary"],
+        }
 
     for result in state["enforcement_results"]:
         if result["decision"] == "BLOCKED":
