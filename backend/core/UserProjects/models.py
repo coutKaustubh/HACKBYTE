@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 
 DEFAULT_USER_DEPLOY_COMMANDS = (
-    "npm install && npm run build > logs/build.log 2>&1 && npm start"
+    "npm install && npm run build > logs/build.log 2>&1 && npm start (Write in exact same way with correct spaces)"
 )
 
 
