@@ -1,7 +1,6 @@
 from models.intent import Intent
 from tools.armor_tools import ArmorTools
 from tools.spacetime_tools import SpacetimeTools
-from utils.logger import log_action_allowed, log_action_blocked
 
 armor = ArmorTools()
 st    = SpacetimeTools()

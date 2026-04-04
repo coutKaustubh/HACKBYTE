@@ -1,28 +1,14 @@
-"""
-tools/vm_tools.py — High-level VM action methods over SSH.
-
-Low-level SSH plumbing (connect, run command, SFTP write) lives in ssh_utils.py.
-The action dispatch table lives in dispatch.py.
-This file only contains business-logic methods.
-"""
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from tools.ssh_utils import (
-    build_ssh_client,
-    run_ssh_command,
-    sftp_write,
-    resolve_remote_path,
-    SSHConnectionError,
-)
 
 _ENV = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV)
 
 
-# ── Backwards-compatible alias so existing code using SSHNotConnectedError works ──
-SSHNotConnectedError = SSHConnectionError
+class SSHNotConnectedError(RuntimeError):
+    """Raised when SSH is not available and no simulation fallback exists."""
+    pass
 
 
 class VMTools:
@@ -42,7 +28,25 @@ class VMTools:
             print("[VMTools] USE_SSH=false → running in MOCK mode (demo/local)")
             return
 
-        self.client = build_ssh_client()
+        import paramiko
+        self.client = paramiko.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            self.client.connect(
+                hostname=os.getenv("VULTR_VM_IP"),
+                username=os.getenv("VULTR_VM_USER"),
+                key_filename=os.path.expanduser(
+                    os.getenv("VULTR_SSH_KEY_PATH", "~/.ssh/id_rsa")
+                ),
+            )
+        except Exception as e:
+            raise SSHNotConnectedError(
+                f"[VMTools] SSH connection to Vultr FAILED: {e}\n"
+                f"  Host: {os.getenv('VULTR_VM_IP')}\n"
+                f"  User: {os.getenv('VULTR_VM_USER')}\n"
+                f"  Key:  {os.getenv('VULTR_SSH_KEY_PATH')}\n"
+                "Fix your SSH credentials in .env and retry."
+            ) from e
 
         base = os.getenv("PUBLIC_APP_URL", "")
         self.app_url = base.rstrip("/") if base else ""
@@ -56,7 +60,10 @@ class VMTools:
             return self._mock_run(cmd)
         if self.client is None:
             raise SSHNotConnectedError("[VMTools] SSH client is not connected.")
-        return run_ssh_command(self.client, cmd)
+        _, stdout, stderr = self.client.exec_command(cmd)
+        out = stdout.read().decode().strip()
+        err = stderr.read().decode().strip()
+        return out if out else err
 
     def _mock_run(self, cmd: str) -> str:
         """Return simulated output so the agent can reason and plan without a real VM."""
@@ -247,9 +254,28 @@ class VMTools:
         out = self._run(f"cd {self.project_root} && git add . && git commit -m '{message}' 2>&1")
         return {"action": "redeploy_app", "target": self.project_root, "status": "SUCCESS", "output": out}
 
-    # ── DISPATCH (delegates to dispatch.py) ───────────────────────────────────
+    # ── DISPATCH ──────────────────────────────────────────────────────────────
 
     def dispatch(self, action: str, target: str, params: dict) -> dict:
         """Single entry point — called by execute node after ArmorClaw approval."""
-        from tools.dispatch import dispatch_action
-        return dispatch_action(self, action, target, params)
+        dispatch_map = {
+            "restart_service":    lambda: self.restart_service(target),
+            "pm2_start":          lambda: self.pm2_start(target, params),
+            "edit_config":        lambda: self.edit_config(target, params),
+            "fix_import_path":    lambda: self.edit_config(target, params),
+            "rollback_deploy":    lambda: self.rollback_deploy(target),
+            "redeploy_app":       lambda: self.redeploy_app(params.get("message", "AI Patch")),
+            "read_logs":          lambda: {"output": self.read_service_logs(target)},
+            "read_file":          lambda: {"output": self.read_file(target)},
+            "write_file":         lambda: self.write_file(target, params.get("content", "")),
+            "create_model_file":  lambda: self.write_file(target, params.get("content", "")),
+            "list_directory":     lambda: self.list_directory(target),
+            "rename_file":        lambda: self.rename_file(target, params),
+            "kill_process":       lambda: self.kill_process(target),
+            "fix_missing_module": lambda: self.install_dependency(target),
+            "install_dependency": lambda: self.install_dependency(target),
+        }
+        fn = dispatch_map.get(action)
+        if not fn:
+            return {"status": "FAILED", "output": f"Unknown action: {action}"}
+        return fn()

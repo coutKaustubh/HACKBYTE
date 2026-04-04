@@ -1,8 +1,6 @@
-from tools.vm_tools      import VMTools
+from tools.vm_tools import VMTools
 from tools.spacetime_tools import SpacetimeTools
-from tools.log_tools     import fetch_deploy_logs
-from utils.logger        import log_incident_started, log_logs_collected
-from utils.project_tree  import tree_cache
+from tools.log_tools import fetch_deploy_logs
 
 vm = VMTools()
 st = SpacetimeTools()
@@ -63,9 +61,7 @@ def collect_node(state: dict) -> dict:
     snapshot = vm.get_system_snapshot()
     configs  = vm.get_config_files()
 
-    # ── Project file tree (cached — SSH only on miss/stale) ──────────────────
-    # This is injected into Gemini prompts so AI references REAL paths only.
-    project_tree = tree_cache.get(vm)
+
 
     # ── Primary: PM2 logs and status ──────────────────────────────────────────
     pm2_logs        = vm._run("pm2 logs --nostream --lines 100 2>/dev/null || pm2 logs --lines 100 2>&1 | head -200")
@@ -116,5 +112,4 @@ def collect_node(state: dict) -> dict:
         "raw_logs": logs,
         "system_snapshot": snapshot,
         "config_files":   configs,
-        "project_tree":   project_tree,   # ← injected into Gemini prompts
     }
