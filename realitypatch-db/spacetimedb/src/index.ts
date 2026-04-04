@@ -20,6 +20,9 @@ const project = table(
     user_id: t.u64(), // Ref to user.id
     name: t.string(),
     description: t.string(),
+    ssh_key: t.string(),
+    server_ip: t.string(),
+    root_directory: t.string(),
   }
 );
 
@@ -118,13 +121,19 @@ export const create_project = spacetimedb.reducer(
     user_id: t.u64(),
     name: t.string(),
     description: t.string(),
+    ssh_key: t.string(),
+    server_ip: t.string(),
+    root_directory: t.string(),
   },
-  (ctx, { user_id, name, description }) => {
+  (ctx, { user_id, name, description, ssh_key, server_ip, root_directory }) => {
     ctx.db.project.insert({
       id: 0n,
       user_id,
       name,
       description,
+      ssh_key,
+      server_ip,
+      root_directory,
     });
   }
 );
@@ -256,18 +265,27 @@ export const init = spacetimedb.init((ctx) => {
       user_id: defaultUserId,
       name: "E-Commerce Gateway",
       description: "Main API gateway for the e-commerce platform.",
+      ssh_key: "default-key",
+      server_ip: "127.0.0.1",
+      root_directory: "/app/gateway",
     });
     ctx.db.project.insert({
       id: 0n,
       user_id: defaultUserId,
       name: "Payment Processor",
       description: "Batch processing and real-time payment verification.",
+      ssh_key: "default-key",
+      server_ip: "127.0.0.1",
+      root_directory: "/app/payments",
     });
     ctx.db.project.insert({
       id: 0n,
       user_id: defaultUserId,
       name: "Inventory Sync",
       description: "Warehouse inventory management and tracking.",
+      ssh_key: "default-key",
+      server_ip: "127.0.0.1",
+      root_directory: "/app/inventory",
     });
   }
 });

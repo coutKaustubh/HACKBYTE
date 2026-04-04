@@ -20,6 +20,7 @@ class Intent(BaseModel):
         "list_directory",
         "rename_file",
         "kill_process",
+        "pm2_start",
         "fix_missing_module",
         "fix_import_path",
         "create_model_file",

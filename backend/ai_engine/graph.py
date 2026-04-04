@@ -5,6 +5,15 @@ from nodes.plan import plan_node
 from nodes.enforce import enforce_node
 from nodes.execute import execute_node
 
+from nodes.verify import verify_node
+
+def should_continue(state: dict):
+    if state.get("incident_resolved", False):
+        return "end"
+    if state.get("retries", 0) >= 3:
+        return "end"
+    return "continue"
+
 def build_graph():
     graph = StateGraph(dict)
 
@@ -13,13 +22,19 @@ def build_graph():
     graph.add_node("plan",     plan_node)
     graph.add_node("enforce",  enforce_node)
     graph.add_node("execute",  execute_node)
+    graph.add_node("verify",   verify_node)
 
     graph.set_entry_point("collect")
     graph.add_edge("collect",  "diagnose")
     graph.add_edge("diagnose", "plan")
     graph.add_edge("plan",     "enforce")
     graph.add_edge("enforce",  "execute")
-    graph.add_edge("execute",  END)
+    graph.add_edge("execute",  "verify")
+    
+    graph.add_conditional_edges("verify", should_continue, {
+        "continue": "collect",
+        "end": END
+    })
 
     return graph.compile()
 

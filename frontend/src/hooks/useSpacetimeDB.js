@@ -128,6 +128,10 @@ export function useSpacetimeDB() {
     reducers.startExecution(incidentId);
   }, []);
 
+  const createProject = useCallback((userId, name, description, sshKey, serverIp, rootDirectory) => {
+    reducers.createProject(userId, name, description, sshKey, serverIp, rootDirectory);
+  }, []);
+
   const resolveIncident = useCallback((incidentId) => {
     reducers.resolveIncident(incidentId);
   }, []);
@@ -142,6 +146,7 @@ export function useSpacetimeDB() {
     users,
     projects,
     createIncident,
+    createProject,
     startExecution,
     resolveIncident,
   };

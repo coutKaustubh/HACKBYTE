@@ -25,11 +25,12 @@ def execute_node(state: dict) -> dict:
         summary["summary"] = (
             f"{summary['summary']} (Execute skipped: AGENT_EXECUTE_ACTIONS=false)"
         )
-        st.emit("INCIDENT_RESOLVED", incident_id, summary)
+        print("INCIDENT_RESOLVED", incident_id, summary)
         return {
             **state,
             "execution_results": [],
             "incident_resolved": False,
+            "summary_data": summary,
             "final_summary": summary["summary"],
         }
 
@@ -54,7 +55,7 @@ def execute_node(state: dict) -> dict:
             output["intent_id"] = result["intent_id"]
             output["status"] = output.get("status", "SUCCESS")
 
-            st.emit("ACTION_EXECUTED", incident_id, output)
+            print("ACTION_EXECUTED", incident_id, output)
             execution_results.append(output)
 
         except Exception as e:
@@ -65,16 +66,17 @@ def execute_node(state: dict) -> dict:
                 "status": "FAILED",
                 "error": str(e)
             }
-            st.emit("ACTION_FAILED", incident_id, failed)
+            print("ACTION_FAILED", incident_id, failed)
             execution_results.append(failed)
 
     summary = build_summary(state, execution_results)
-    st.emit("INCIDENT_RESOLVED", incident_id, summary)
+    print("INCIDENT_RESOLVED", incident_id, summary)
 
     return {
         **state,
         "execution_results": execution_results,
         "incident_resolved": all_success,
+        "summary_data": summary,
         "final_summary": summary["summary"]
     }
 

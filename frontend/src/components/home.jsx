@@ -5,7 +5,7 @@ import Antigravity from './Antigravity';
 export default function Home() {
   return (
     <div className="relative w-full min-h-screen">
-      <div className="absolute inset-0 z-0">
+      {/* <div className="absolute inset-0 z-0">
         <Antigravity
           count={300}
           magnetRadius={14}
@@ -23,11 +23,11 @@ export default function Home() {
           particleShape="capsule"
           fieldStrength={10}
         />
-      </div>
+      </div> */}
       <div className="relative z-10 min-h-screen bg-transparent flex flex-col font-sans">
       <nav className="h-16 px-8 flex items-center justify-between bg-white border-b border-[#E5E5E5] sticky top-0 z-10">
         <div className="flex items-center gap-2">
-          <Activity className="w-6 h-6 text-[#171717]" />
+          <img src="/Xone.png" alt="XOne Logo" className="w-8 h-8 object-contain" />
           <span className="font-bold text-lg tracking-tight text-[#171717]">XOne</span>
         </div>
         <div className="flex items-center gap-4">

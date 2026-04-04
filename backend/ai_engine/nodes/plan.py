@@ -36,7 +36,7 @@ def plan_node(state: dict) -> dict:
     )
     intents.append(demo_blocked_intent)
 
-    st.emit("PLAN_READY", incident_id, {
+    print("PLAN_READY", incident_id, {
         "total_intents": len(intents),
         "intents": [i.dict() for i in intents]
     })

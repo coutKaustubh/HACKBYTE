@@ -1,13 +1,20 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
+import AddProjectModal from '../components/AddProjectModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
-import { Layout, Boxes, Terminal as TermIcon, Shield, Activity, ArrowRight, Plus } from 'lucide-react'
+import { Boxes, Activity, ArrowRight, Plus } from 'lucide-react'
 
 export default function Dashboard() {
-  const { projects, incidents, isConnected } = useSpacetimeDB();
+  const { projects, incidents, isConnected, users, createProject } = useSpacetimeDB();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const projectList = Object.values(projects);
   const incidentList = Object.values(incidents);
+  const userList = Object.values(users);
+
+  // For now, we assume the first user is the one creating projects
+  const currentUserId = userList[0]?.id || 0n;
 
   const activeIncidentsCount = incidentList.filter(inc => inc.status === 'error').length;
 
@@ -26,63 +33,66 @@ export default function Dashboard() {
         <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-[#171717] flex items-center justify-center">
-                 <Boxes className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-xl bg-[#171717] flex items-center justify-center shadow-lg">
+                 <Boxes className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-[#171717]">Control Center</h1>
+              <h1 className="text-3xl font-black text-[#171717] tracking-tight">Control Center</h1>
             </div>
-            <p className="text-[#737373] max-w-md">
-              Manage your autonomous monitoring agents across multiple service clusters.
+            <p className="text-[#737373] max-w-md text-sm font-medium">
+              Manage your autonomous monitoring agents across multiple clusters.
             </p>
           </div>
 
-          <button className="px-5 py-2.5 bg-[#171717] hover:bg-[#262626] text-white rounded-lg shadow-sm font-bold text-xs uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-[1.02]">
-            <Plus className="w-4 h-4" /> New Project
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="px-6 py-3 bg-[#171717] hover:bg-[#262626] text-white rounded-xl shadow-lg font-bold text-xs uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="w-5 h-5" /> New Project
           </button>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-1">Active Projects</span>
+          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Active Projects</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-[#171717]">{projectList.length}</span>
-              <span className="text-xs font-bold text-success">Online</span>
+              <span className="text-xs font-bold text-success bg-success/10 px-2 py-0.5 rounded-full">Online</span>
             </div>
           </div>
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-1">Live Incidents</span>
+          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Live Incidents</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-[#171717]">{activeIncidentsCount}</span>
-              <span className={`text-xs font-bold ${activeIncidentsCount > 0 ? 'text-error' : 'text-success'}`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeIncidentsCount > 0 ? 'bg-error/10 text-error' : 'bg-success/10 text-success'}`}>
                 {activeIncidentsCount > 0 ? 'Critical' : 'Nominal'}
               </span>
             </div>
           </div>
-          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm">
-            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-1">Fleet Health</span>
+          <div className="bg-white border border-[#E5E5E5] p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <span className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest block mb-2">Fleet Health</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-[#171717]">99.8</span>
-              <span className="text-xs font-bold text-[#737373]">% SLA</span>
+              <span className="text-xs font-bold text-[#737373] bg-[#F5F5F5] px-2 py-0.5 rounded-full">% SLA</span>
             </div>
           </div>
         </div>
         
         {/* Project Grid */}
-        <h2 className="text-lg font-bold text-[#171717] mb-6 flex items-center gap-2">
-          Your Projects
-          <div className="flex-1 h-px bg-[#E5E5E5]" />
-        </h2>
+        <div className="flex items-center gap-4 mb-8">
+          <h2 className="text-xl font-bold text-[#171717] shrink-0">Your Fleet</h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-[#E5E5E5] to-transparent" />
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projectList.length === 0 && isConnected ? (
-            <div className="col-span-full text-center py-24 bg-white border border-dashed border-[#E5E5E5] rounded-3xl">
-               <Boxes className="w-12 h-12 text-[#E5E5E5] mx-auto mb-4" />
-               <h3 className="text-xl font-bold text-[#737373]">No Projects Configured</h3>
-               <p className="text-sm text-[#A3A3A3] mt-2">Initialize your first service monitor to begin.</p>
-            </div>
-          ) : (
-            projectList.map(project => {
+        {projectList.length === 0 && isConnected ? (
+          <div className="text-center py-24 bg-white border border-dashed border-[#E5E5E5] rounded-[2rem]">
+             <Boxes className="w-16 h-16 text-[#E5E5E5] mx-auto mb-4" />
+             <h3 className="text-xl font-bold text-[#737373]">No Projects Configured</h3>
+             <p className="text-sm text-[#A3A3A3] mt-2">Initialize your first service monitor to begin deployment.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {projectList.map(project => {
               const projectIncidents = incidentList.filter(inc => String(inc.project_id) === String(project.id));
               const hasAlert = projectIncidents.some(inc => inc.status === 'error');
 
@@ -90,39 +100,54 @@ export default function Dashboard() {
                 <Link 
                   key={project.id} 
                   to={`/project/${project.id}`}
-                  className="group bg-white border border-[#E5E5E5] rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all hover:border-[#171717] flex flex-col relative overflow-hidden"
+                  className="group bg-white border border-[#E5E5E5] rounded-[2rem] p-8 shadow-sm hover:shadow-2xl transition-all hover:-translate-y-1 hover:border-[#171717] flex flex-col relative overflow-hidden"
                 >
                   {hasAlert && (
-                    <div className="absolute top-0 right-0 p-3">
-                       <div className="w-2 h-2 rounded-full bg-error animate-ping" />
+                    <div className="absolute top-6 right-6">
+                       <div className="w-3 h-3 rounded-full bg-error shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse" />
                     </div>
                   )}
 
-                  <div className="mb-4">
-                     <div className="w-10 h-10 rounded-xl bg-[#F5F5F5] group-hover:bg-[#171717] flex items-center justify-center transition-colors mb-4">
-                        <Activity className="w-5 h-5 text-[#737373] group-hover:text-white" />
+                  <div className="mb-6">
+                     <div className="w-12 h-12 rounded-2xl bg-[#F5F5F5] group-hover:bg-[#171717] flex items-center justify-center transition-all duration-300 mb-6 group-hover:rotate-[10deg]">
+                        <Activity className="w-6 h-6 text-[#737373] group-hover:text-white" />
                      </div>
-                     <h3 className="text-xl font-bold text-[#171717] group-hover:translate-x-1 transition-transform">{project.name}</h3>
-                     <p className="text-sm text-[#737373] mt-2 line-clamp-2 leading-relaxed">
+                     <h3 className="text-2xl font-black text-[#171717] leading-tight mb-2">{project.name}</h3>
+                     <p className="text-sm text-[#737373] line-clamp-2 leading-relaxed font-medium">
                         {project.description}
                      </p>
                   </div>
 
                   <div className="mt-auto pt-6 flex items-center justify-between border-t border-[#F5F5F5]">
                     <div className="flex flex-col">
-                       <span className="text-[9px] font-bold text-[#A3A3A3] uppercase tracking-widest">Active Logs</span>
-                       <span className="text-xs font-bold text-[#171717]">{projectIncidents.length} Records</span>
+                       <span className="text-[10px] font-black text-[#A3A3A3] uppercase tracking-widest mb-1">State Log</span>
+                       <span className="text-sm font-bold text-[#171717]">{projectIncidents.length} Records</span>
                     </div>
-                    <div className="p-2 rounded-full bg-[#FAFAFA] group-hover:bg-[#171717] group-hover:text-white transition-all">
-                       <ArrowRight className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-full bg-[#FAFAFA] group-hover:bg-[#171717] group-hover:text-white transition-all flex items-center justify-center">
+                       <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                     </div>
                   </div>
                 </Link>
               )
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </main>
+
+      <AddProjectModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSubmit={(data) => {
+          createProject(
+            currentUserId,
+            data.name, 
+            data.description, 
+            data.sshKey, 
+            data.serverIp, 
+            data.rootDirectory
+          );
+        }} 
+      />
     </div>
   )
 }
