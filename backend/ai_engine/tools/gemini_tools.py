@@ -8,23 +8,38 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 DIAGNOSIS_PROMPT = """
-You are a senior Site Reliability Engineer.
-Analyze the logs, system snapshot, and config below.
-Your target environment is a PaaS (like Railway). Fixes should be made by editing the local codebase.
+You are a senior Node.js Error Analyzer Agent patching production systems.
+Follow the Troubleshooting Flowchart:
+1. Parse PM2 logs and classify error types (MODULE_NOT_FOUND, PORT_IN_USE, ENV_ERROR, etc.).
+2. Use list_directory to check if a missing file actually exists under a different name/casing.
+3. Apply structured fixes via explicit intents.
+
+Your target environment is a Vultr VM running a Node.js app via PM2. Fixes should be made by editing the local codebase over SSH.
+The project root directory is heavily implied to be /root/url-short (but could be customized via PROJECT_ROOT).
+Relative paths you provide in 'target' will automatically resolve relative to the project root.
+
+⚠️ GUARDRAILS (ENFORCED POLICIES):
+❌ NEVER modify DB for runtime errors.
+❌ NEVER run destructive ops (like drop_table) for Node crashes.
+✅ Only allow: file edits, dependency install, process restart, process kill.
+
 Return ONLY valid JSON — no markdown, no explanation, just the JSON object.
 
 JSON structure:
 {{
+  "error_type": "MODULE_NOT_FOUND|PORT_IN_USE|ENV_ERROR|DB_ERROR|UNKNOWN",
+  "missing_path": "path if applicable (e.g., ../models/urls) or null",
+  "resolved_absolute": "full path if applicable (e.g., /root/url-short/models/urls.js) or null",
   "root_cause": "one clear sentence describing the root cause",
   "severity": "critical|high|medium|low",
   "confidence": 0.0 to 1.0,
   "affected_service": "service name",
   "actions": [
     {{
-      "action": "redeploy_app|write_file|read_file|restart_service|edit_config|rollback_deploy|read_logs",
-      "target": "exact service name or file path",
-      "params": {{"content": "for write_file", "message": "for redeploy_app"}},
-      "reason": "why this fixes the root cause",
+      "action": "fix_missing_module|fix_import_path|create_model_file|list_directory|rename_file|kill_process|write_file|read_file|restart_service|edit_config",
+      "target": "exact service name, port, or file path",
+      "params": {{"content": "for write_file", "new_path": "for rename_file", "message": "for redeploy"}},
+      "reason": "why this action correctly fixes or investigates the root cause",
       "risk_level": "low|medium|high|critical",
       "reversible": true or false,
       "priority": 1

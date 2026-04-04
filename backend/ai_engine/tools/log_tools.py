@@ -2,7 +2,7 @@
 Fetch real deploy/app logs over HTTP for the collect node.
 
 Set LOG_SOURCE_URL to any endpoint that returns plain text logs or JSON { "logs": "..." }.
-Examples: your own /internal/logs route, a log drain URL, or a small worker that reads Railway exports.
+Examples: your own /internal/logs route, a log drain URL, or a custom worker.
 """
 
 import json

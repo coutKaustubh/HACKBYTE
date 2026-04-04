@@ -1,11 +1,9 @@
 from tools.vm_tools import VMTools
 from tools.spacetime_tools import SpacetimeTools
 from tools.log_tools import fetch_deploy_logs
-from tools.railway_tools import RailwayTools
 
 vm = VMTools()
 st = SpacetimeTools()
-rw = RailwayTools()
 
 def collect_node(state: dict) -> dict:
     incident_id = state["incident_id"]
@@ -34,16 +32,6 @@ def collect_node(state: dict) -> dict:
             "=== Deploy / app logs (LOG_SOURCE_URL) ===\n"
             f"{external}\n\n"
             "=== Host / service context (SSH or simulation) ===\n"
-            f"{logs}"
-        )
-
-    if rw.is_enabled:
-        logs = (
-            "=== Railway Error Logs (from real app) ===\n"
-            f"{rw.get_error_logs()}\n\n"
-            "=== Railway HTTP Logs ===\n"
-            f"{rw.get_http_logs()}\n\n"
-            "=== Fallback VM/Simulated Local Logs ===\n"
             f"{logs}"
         )
 

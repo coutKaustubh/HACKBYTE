@@ -5,7 +5,7 @@ import os
 import uuid
 import asyncio
 import time
-from tools.railway_tools import RailwayTools
+from tools.vm_tools import VMTools
 from starlette.concurrency import run_in_threadpool
 
 app = FastAPI()
@@ -16,22 +16,22 @@ polling_interval = 30 # standard 30 secs
 
 @app.on_event("startup")
 async def start_polling():
-    asyncio.create_task(poll_railway_logs())
+    asyncio.create_task(poll_vultr_logs())
 
-async def poll_railway_logs():
+async def poll_vultr_logs():
     global last_execution_time, last_error_signature, polling_interval
-    rw = RailwayTools()
-    if not rw.is_enabled:
-        print("[Polling] RAILWAY_TOKEN not found. Continuous monitoring disabled.")
+    vm = VMTools()
+    if not vm.use_ssh:
+        print("[Polling] USE_SSH is false. Continuous monitoring on Vultr disabled.")
         return
 
-    print("[Polling] Started background monitor for Railway logs...")
+    print("[Polling] Started background monitor for Vultr server logs (journalctl)...")
     while True:
         try:
-            errors = rw.get_error_logs()
+            errors = vm._run("journalctl -p err -n 20 --no-pager")
             
-            # Simple check to see if we have real errors avoiding the 'No prominent error logs' string
-            if "No prominent error" not in errors and len(errors.strip()) > 10:
+            # Simple check to see if we have real errors avoiding empty string
+            if errors and len(errors.strip()) > 10 and "No entries" not in errors:
                 current_time = time.time()
                 
                 # We need a signature so we don't trigger on the EXACT same error stream indefinitely
@@ -39,7 +39,7 @@ async def poll_railway_logs():
                 
                 # Check stabilization window: at least 60 seconds between executions
                 if current_time - last_execution_time > 60 and current_sig != last_error_signature:
-                    print(f"\n🚨 [Polling] Detected new Railway errors! Interval changed to {polling_interval}s. Waking up Agent! 🚨")
+                    print(f"\n🚨 [Polling] Detected new server errors! Interval changed to {polling_interval}s. Waking up Agent! 🚨")
                     last_execution_time = current_time
                     last_error_signature = current_sig
                     
@@ -49,7 +49,7 @@ async def poll_railway_logs():
                     # Execute agent
                     initial_state = {
                         "incident_id": f"inc-{uuid.uuid4().hex[:8]}",
-                        "source": "railway_continuous_monitor",
+                        "source": "vultr_continuous_monitor",
                         "service_hint": "auto-detected"
                     }
                     

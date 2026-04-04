@@ -17,6 +17,12 @@ class Intent(BaseModel):
         "read_logs",
         "read_file",
         "write_file",
+        "list_directory",
+        "rename_file",
+        "kill_process",
+        "fix_missing_module",
+        "fix_import_path",
+        "create_model_file",
         "drop_table",        # will always be BLOCKED — demo purpose
         "delete_database",   # will always be BLOCKED
         "exec_arbitrary"     # will always be BLOCKED
