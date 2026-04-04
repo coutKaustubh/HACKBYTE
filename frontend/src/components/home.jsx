@@ -1,13 +1,34 @@
 import { Link } from 'react-router-dom'
 import { Activity, Shield, Zap, ArrowRight } from 'lucide-react'
+import Antigravity from './Antigravity';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col font-sans">
+    <div className="relative w-full min-h-screen">
+      <div className="absolute inset-0 z-0">
+        <Antigravity
+          count={300}
+          magnetRadius={14}
+          ringRadius={6}
+          waveSpeed={0.4}
+          waveAmplitude={1}
+          particleSize={1.3}
+          lerpSpeed={0.05}
+          color="#5227FF"
+          autoAnimate
+          particleVariance={1}
+          rotationSpeed={0}
+          depthFactor={1}
+          pulseSpeed={3}
+          particleShape="capsule"
+          fieldStrength={10}
+        />
+      </div>
+      <div className="relative z-10 min-h-screen bg-transparent flex flex-col font-sans">
       <nav className="h-16 px-8 flex items-center justify-between bg-white border-b border-[#E5E5E5] sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <Activity className="w-6 h-6 text-[#171717]" />
-          <span className="font-bold text-lg tracking-tight text-[#171717]">Patchify</span>
+          <span className="font-bold text-lg tracking-tight text-[#171717]">XOne</span>
         </div>
         <div className="flex items-center gap-4">
           <Link 
@@ -81,8 +102,9 @@ export default function Home() {
       </main>
       
       <footer className="py-8 text-center text-[#737373] text-sm border-t border-[#E5E5E5]">
-        © {new Date().getFullYear()} Patchify Inc. Built for continuous uptime.
+        © {new Date().getFullYear()} XOne Inc. Built for continuous uptime.
       </footer>
+    </div>
     </div>
   )
 }

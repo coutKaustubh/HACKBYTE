@@ -7,12 +7,9 @@ export default function ProjectCard({ project }) {
   return (
     <div className="bg-[#FFFFFF] border border-[#E5E5E5] p-5 rounded-lg flex flex-col h-full hover:border-accent/50 transition-colors">
       <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-medium text-[#171717] flex items-center gap-2">
+        <h3 className="text-lg font-bold text-[#171717] tracking-tight">
           {project.name}
         </h3>
-        <span className={`text-xs px-2 py-0.5 rounded-full border ${project.status === 'Active' ? 'border-success text-success bg-success/10' : 'border-[#E5E5E5] text-[#737373] bg-[#FAFAFA]/50'}`}>
-          {project.status}
-        </span>
       </div>
       
       <div className="text-sm text-[#737373] mb-6 flex-grow">

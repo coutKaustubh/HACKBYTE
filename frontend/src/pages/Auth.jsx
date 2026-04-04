@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import ClickSpark from './ClickSpark'; 
+import ClickSpark from '../components/ClickSpark';
+import { DotLottiePlayer } from '@dotlottie/react-player';
 
 export default function Auth() {
   const navigate = useNavigate()
@@ -12,17 +13,25 @@ export default function Auth() {
   sparkCount={8}
   duration={400}
 >
-    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
-      <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#E5E5E5] p-8 rounded-lg shadow-xl">
+    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4 relative">
+      <div className="w-full max-w-sm bg-white border border-[#E5E5E5] p-8 rounded-xl shadow-lg overflow-hidden relative z-10">
+        <div className="w-full flex justify-center mb-2">
+          <DotLottiePlayer
+             src="/Morphing.lottie"
+             autoplay
+             loop
+             style={{ width: '200px', height: '200px' }}
+          />
+        </div>
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#171717] mb-2">Patchify</h1>
+          <h1 className="text-2xl font-bold text-[#171717] mb-2">XOne</h1>
           <p className="text-sm text-[#737373]">Autonomous system recovery platform</p>
         </div>
         
         <div className="space-y-4">
           <button 
             onClick={() => window.location.href = 'http://localhost:8000/api/auth/google/login/'}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded border border-[#E5E5E5] bg-transparent text-[#171717] hover:bg-border/50 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded border border-transparent bg-red-400 text-white hover:bg-red-500 shadow-sm transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
