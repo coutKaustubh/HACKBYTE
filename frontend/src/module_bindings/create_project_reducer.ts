@@ -12,9 +12,11 @@ import {
 
 export default {
   user_id: __t.u64(),
+  django_project_id: __t.u64(),
   name: __t.string(),
   description: __t.string(),
   ssh_key: __t.string(),
   server_ip: __t.string(),
   root_directory: __t.string(),
+  deploy_commands: __t.string(),
 };

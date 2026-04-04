@@ -17,12 +17,14 @@ const project = table(
   { name: "project", public: true },
   {
     id: t.u64().primaryKey().autoInc(),
-    user_id: t.u64(), // Ref to user.id
+    user_id: t.u64(), // Ref to user.id (mirrors Django user pk)
+    django_project_id: t.u64(), // Mirror of the Postgres project PK — used to correlate data
     name: t.string(),
     description: t.string(),
     ssh_key: t.string(),
     server_ip: t.string(),
     root_directory: t.string(),
+    deploy_commands: t.string(), // Shell commands to deploy
   }
 );
 
@@ -119,21 +121,25 @@ export const create_user = spacetimedb.reducer(
 export const create_project = spacetimedb.reducer(
   {
     user_id: t.u64(),
+    django_project_id: t.u64(),
     name: t.string(),
     description: t.string(),
     ssh_key: t.string(),
     server_ip: t.string(),
     root_directory: t.string(),
+    deploy_commands: t.string(),
   },
-  (ctx, { user_id, name, description, ssh_key, server_ip, root_directory }) => {
+  (ctx, { user_id, django_project_id, name, description, ssh_key, server_ip, root_directory, deploy_commands }) => {
     ctx.db.project.insert({
       id: 0n,
       user_id,
+      django_project_id,
       name,
       description,
       ssh_key,
       server_ip,
       root_directory,
+      deploy_commands,
     });
   }
 );
@@ -263,29 +269,35 @@ export const init = spacetimedb.init((ctx) => {
     ctx.db.project.insert({
       id: 0n,
       user_id: defaultUserId,
+      django_project_id: 0n,
       name: "E-Commerce Gateway",
       description: "Main API gateway for the e-commerce platform.",
       ssh_key: "default-key",
       server_ip: "127.0.0.1",
       root_directory: "/app/gateway",
+      deploy_commands: "npm install && npm run build && npm start",
     });
     ctx.db.project.insert({
       id: 0n,
       user_id: defaultUserId,
+      django_project_id: 0n,
       name: "Payment Processor",
       description: "Batch processing and real-time payment verification.",
       ssh_key: "default-key",
       server_ip: "127.0.0.1",
       root_directory: "/app/payments",
+      deploy_commands: "npm install && npm run build && npm start",
     });
     ctx.db.project.insert({
       id: 0n,
       user_id: defaultUserId,
+      django_project_id: 0n,
       name: "Inventory Sync",
       description: "Warehouse inventory management and tracking.",
       ssh_key: "default-key",
       server_ip: "127.0.0.1",
       root_directory: "/app/inventory",
+      deploy_commands: "npm install && npm run build && npm start",
     });
   }
 });

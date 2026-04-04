@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { DbConnection, reducers } from '../module_bindings';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DbConnection } from '../module_bindings';
 
 export function useSpacetimeDB() {
   const [incidents, setIncidents] = useState({});
@@ -11,15 +11,20 @@ export function useSpacetimeDB() {
   const [projects, setProjects] = useState({});
   const [isConnected, setIsConnected] = useState(false);
 
+  // Hold the live connection so callbacks outside useEffect can call reducers
+  const connRef = useRef(null);
+
   useEffect(() => {
     let conn;
 
     const connectToDB = () => {
       // Connect to the local SpacetimeDB instance
       conn = DbConnection.builder()
-        .withUri("http://127.0.0.1:3000") // SpacetimeDB client will manage the WS protocol over this URI
+        .withUri("http://127.0.0.1:3000")
         .withDatabaseName("realitypatch-db-2lsay")
         .build();
+
+      connRef.current = conn;
 
       conn.onConnect((context) => {
         setIsConnected(true);
@@ -108,6 +113,7 @@ export function useSpacetimeDB() {
 
       conn.onDisconnect(() => {
         setIsConnected(false);
+        connRef.current = null;
         console.log("Disconnected. Reconnecting...");
         setTimeout(connectToDB, 3000);
       });
@@ -117,23 +123,27 @@ export function useSpacetimeDB() {
 
     return () => {
       if (conn) conn.disconnect();
+      connRef.current = null;
     };
   }, []);
 
+  // ─── Reducer helpers ─────────────────────────────────────────────────────────
+  // All reducers are called on the live connection via connRef.current.reducers
+
   const createIncident = useCallback((projectId, service, logs) => {
-    reducers.createIncident(projectId, service, logs);
+    connRef.current?.reducers.createIncident(projectId, service, logs);
   }, []);
 
   const startExecution = useCallback((incidentId) => {
-    reducers.startExecution(incidentId);
+    connRef.current?.reducers.startExecution(incidentId);
   }, []);
 
-  const createProject = useCallback((userId, name, description, sshKey, serverIp, rootDirectory) => {
-    reducers.createProject(userId, name, description, sshKey, serverIp, rootDirectory);
+  const createProject = useCallback((userId, djangoProjectId, name, description, sshKey, serverIp, rootDirectory, deployCommands) => {
+    connRef.current?.reducers.createProject(userId, djangoProjectId, name, description, sshKey, serverIp, rootDirectory, deployCommands);
   }, []);
 
   const resolveIncident = useCallback((incidentId) => {
-    reducers.resolveIncident(incidentId);
+    connRef.current?.reducers.resolveIncident(incidentId);
   }, []);
 
   return {
@@ -151,3 +161,5 @@ export function useSpacetimeDB() {
     resolveIncident,
   };
 }
+
+

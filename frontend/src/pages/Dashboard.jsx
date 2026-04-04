@@ -6,8 +6,37 @@ import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
 import { fetchProjects, createProject as createProjectApi } from '../lib/api'
 import { Boxes, Activity, ArrowRight, Plus } from 'lucide-react'
 
+/** Decode a JWT payload without verifying the signature. */
+function decodeJwtPayload(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Call a SpacetimeDB reducer directly via HTTP.
+ * Args must be a JSON array matching the reducer's positional parameters.
+ * u64 fields → pass as JS Number (the HTTP API accepts numeric literals).
+ */
+async function callStdbReducer(reducerName, args) {
+  const url = `http://127.0.0.1:3000/v1/database/realitypatch-db-2lsay/call/${reducerName}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.status);
+    throw new Error(`SpacetimeDB ${reducerName} failed: ${text}`);
+  }
+  return res;
+}
+
 export default function Dashboard() {
-  const { projects, incidents, isConnected } = useSpacetimeDB();
+  const { projects, incidents, isConnected, createProject: createProjectStdb } = useSpacetimeDB();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [djangoProjects, setDjangoProjects] = useState(null);
   const [projectsLoadError, setProjectsLoadError] = useState(null);
@@ -168,10 +197,45 @@ export default function Dashboard() {
             window.alert('Sign in first so your project can be saved to your account.');
             return;
           }
+
           try {
-            await createProjectApi(token, data);
+            // 1️⃣ Save to Postgres via Django API
+            const created = await createProjectApi(token, data);
+            console.log('[Django] Created project:', created);
+
+            // Refresh the list from Django right away
             refreshDjangoProjects();
+            setIsModalOpen(false);
+
+            // 2️⃣ Mirror into SpacetimeDB via direct HTTP call
+            // (avoids BigInt/SDK serialization issues entirely)
+            try {
+              const payload = decodeJwtPayload(token);
+              // Map JWT user id → number (fallback 1)
+              const userId   = parseInt(String(payload.user_id ?? payload.sub ?? '1'), 10) || 1;
+              // Map returned project id → number (fallback 0)
+              const projectId = parseInt(String(created?.id ?? created?.pk ?? '0'), 10) || 0;
+
+              console.log('[STDB HTTP] Calling create_project →', { userId, projectId, name: data.name });
+
+              // Args order must match the reducer definition:
+              // (user_id u64, django_project_id u64, name, description, ssh_key, server_ip, root_directory, deploy_commands)
+              await callStdbReducer('create_project', [
+                userId,
+                projectId,
+                data.name || '',
+                data.description || '',
+                data.sshKey || '',
+                data.serverIp || '',
+                data.rootDirectory || '',
+                data.userDeployCommands || 'npm install && npm run build && npm start',
+              ]);
+              console.log('[STDB HTTP] create_project ✓');
+            } catch (stdbErr) {
+              console.warn('[STDB HTTP] Mirror failed (non-fatal):', stdbErr.message);
+            }
           } catch (err) {
+            console.error('[Project create error]', err);
             window.alert(err.message || 'Could not create project');
           }
         }} 
