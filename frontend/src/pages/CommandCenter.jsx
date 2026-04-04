@@ -1,13 +1,13 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Terminal from '../components/Terminal'
 import DiagnosisPanel from '../components/DiagnosisPanel'
 import SQLMonitor from '../components/SQLMonitor'
 import BlockchainVerifyModal from '../components/BlockchainVerifyModal'
 import { useSpacetimeDB } from '../hooks/useSpacetimeDB'
+import { runAgent } from '../lib/api'
 import { ArrowLeft, Loader2, CheckCircle2, XCircle, Zap, ShieldCheck } from 'lucide-react'
 import { logToBlockchain } from '../lib/logToBlockchain'
-import { runAgent } from '../lib/api'
 
 export default function CommandCenter() {
   const { id: projectId } = useParams()
@@ -17,6 +17,7 @@ export default function CommandCenter() {
   const [agentRunning, setAgentRunning] = useState(false)
   const [agentResult, setAgentResult]   = useState(null)
   const [agentError, setAgentError]     = useState(null)
+  const [streamingLogs, setStreamingLogs] = useState([])
 
   // Verify modal state
   const [verifyOpen, setVerifyOpen]     = useState(false)
@@ -30,10 +31,17 @@ export default function CommandCenter() {
     .sort((a, b) => Number(a.id) - Number(b.id));
 
   const currentIncident = projectIncidents[projectIncidents.length - 1]; // latest
-  const incidentId = currentIncident?.id;
-  const currentAiDecision = aiDecisions[incidentId];
-  const currentSafetyCheck = safetyChecks[incidentId];
-  const currentExecution = executions[incidentId];
+  // ai_decision.incidentId is a u64 FK → matches incident.id (numeric)
+  const currentAiDecision = aiDecisions[Number(currentIncident?.id)];
+  const currentSafetyCheck = safetyChecks[currentIncident?.id];
+  const currentExecution = executions[currentIncident?.id];
+
+  // ── DEBUG ────────────────────────────────────────────────────────────────────
+  console.log('[CC] projectIncidents:', projectIncidents);
+  console.log('[CC] currentIncident:', currentIncident, '→ id:', currentIncident?.id);
+  console.log('[CC] aiDecisions map keys:', Object.keys(aiDecisions));
+  console.log('[CC] currentAiDecision:', currentAiDecision);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Filter live agent events for this project (most recent 20)
   const projectAgentEvents = Object.values(agentEvents)
@@ -79,12 +87,83 @@ export default function CommandCenter() {
       setAgentError('You must be signed in to run the agent.')
       return
     }
+
     setAgentRunning(true)
     setAgentResult(null)
     setAgentError(null)
+    setStreamingLogs([{ type: 'system', text: '[SYSTEM] Initializing autonomous pipeline...' }])
+
     try {
-      const result = await runAgent(token, projectId)
-      setAgentResult(result)
+      const { runAgentStream } = await import('../lib/api')
+      
+      let currentAiLogIdx = -1;
+
+      await runAgentStream(token, projectId, {
+        onEvent: (evt) => {
+          console.log('[SSE EVENT]', evt);
+
+          if (evt.event === 'node_start') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'system', 
+              text: `\n[PIPELINE] >>> Node: ${evt.label || evt.name} starting...` 
+            }]);
+            // If it's a new diagnosis node, prepare to capture tokens
+            if (evt.name === 'diagnose') currentAiLogIdx = -1;
+          } 
+          
+          else if (evt.event === 'node_end') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'success', 
+              text: `[PIPELINE] <<< Node: ${evt.label || evt.name} complete.` 
+            }]);
+          }
+
+          else if (evt.event === 'llm_token') {
+            setStreamingLogs(prev => {
+              const next = [...prev];
+              // If we haven't started an AI bucket for this node, create one
+              if (currentAiLogIdx === -1 || next[currentAiLogIdx].type !== 'ai') {
+                currentAiLogIdx = next.length;
+                return [...next, { type: 'ai', text: evt.data.token }];
+              }
+              // Append to existing AI bucket
+              next[currentAiLogIdx] = { 
+                ...next[currentAiLogIdx], 
+                text: next[currentAiLogIdx].text + evt.data.token 
+              };
+              return next;
+            });
+          }
+
+          else if (evt.event === 'tool_start') {
+            setStreamingLogs(prev => [...prev, { 
+              type: 'normal', 
+              text: `[TOOL] Calling ${evt.name}...` 
+            }]);
+          }
+
+          else if (evt.event === 'done') {
+            setAgentResult({
+              incident_id: evt.data.incident_id,
+              resolved: evt.data.incident_resolved,
+              summary: evt.data.final_summary,
+            });
+            setStreamingLogs(prev => [...prev, { 
+              type: 'success', 
+              text: `\n[SYSTEM] Pipeline run finished. Incident ${evt.data.incident_id} state updated.` 
+            }]);
+          }
+
+          else if (evt.event === 'error') {
+            setAgentError(evt.data.message);
+            setStreamingLogs(prev => [...prev, { 
+              type: 'error', 
+              text: `[FATAL] ${evt.data.message}` 
+            }]);
+          }
+        }
+      });
+
     } catch (err) {
       setAgentError(err.message || 'Agent run failed')
     } finally {
@@ -186,6 +265,7 @@ export default function CommandCenter() {
               aiDecision={currentAiDecision}
               safetyCheck={currentSafetyCheck}
               execution={currentExecution}
+              streamingLogs={streamingLogs}
             />
           </div>
 
@@ -216,12 +296,12 @@ export default function CommandCenter() {
                 {[...projectAgentEvents].reverse().map(event => (
                   <div key={event.id} className="px-4 py-2 flex items-start gap-2">
                     <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${event.eventType === 'ACTION_BLOCKED' || event.eventType === 'ACTION_FAILED'
-                        ? 'bg-red-50 text-red-600'
-                        : event.eventType === 'INCIDENT_RESOLVED'
-                          ? 'bg-green-50 text-green-700'
-                          : event.eventType === 'AGENT_THINKING'
-                            ? 'bg-purple-50 text-purple-700'
-                            : 'bg-[#F5F5F5] text-[#737373]'
+                      ? 'bg-red-50 text-red-600'
+                      : event.eventType === 'INCIDENT_RESOLVED'
+                        ? 'bg-green-50 text-green-700'
+                        : event.eventType === 'AGENT_THINKING'
+                          ? 'bg-purple-50 text-purple-700'
+                          : 'bg-[#F5F5F5] text-[#737373]'
                       }`}>{(event.eventType || '').replace(/_/g, ' ')}</span>
                     <span className="text-[10px] text-[#737373] font-mono truncate">{event.incidentId}</span>
                   </div>
