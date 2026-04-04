@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { DbConnection, reducers } from '../module_bindings';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DbConnection } from '../module_bindings';
 
 export function useSpacetimeDB() {
   const [incidents, setIncidents] = useState({});
@@ -11,15 +11,20 @@ export function useSpacetimeDB() {
   const [projects, setProjects] = useState({});
   const [isConnected, setIsConnected] = useState(false);
 
+  // Hold the live connection so callbacks outside useEffect can call reducers
+  const connRef = useRef(null);
+
   useEffect(() => {
     let conn;
 
     const connectToDB = () => {
       // Connect to the local SpacetimeDB instance
       conn = DbConnection.builder()
-        .withUri("http://127.0.0.1:3000") // SpacetimeDB client will manage the WS protocol over this URI
+        .withUri("http://127.0.0.1:3000")
         .withDatabaseName("realitypatch-db-2lsay")
         .build();
+
+      connRef.current = conn;
 
       conn.onConnect((context) => {
         setIsConnected(true);
@@ -41,15 +46,16 @@ export function useSpacetimeDB() {
              setIncidents(incMap);
 
              const execMap = {};
-             for (let ex of allExecutions) { execMap[ex.incidentId] = ex; }
+             // execution.incidentId is now a string matching incident.incidentId
+             for (let ex of allExecutions) { execMap[ex.id] = ex; }
              setExecutions(execMap);
 
              const aiMap = {};
-             for (let ai of allAiDecisions) { aiMap[ai.incidentId] = ai; }
+             for (let ai of allAiDecisions) { aiMap[ai.incidentId ?? ai.incident_id] = ai; }
              setAiDecisions(aiMap);
 
              const safetyMap = {};
-             for (let safe of allSafetyChecks) { safetyMap[safe.incidentId] = safe; }
+             for (let safe of allSafetyChecks) { safetyMap[safe.id] = safe; }
              setSafetyChecks(safetyMap);
 
              const agentEventMap = {};
@@ -75,18 +81,18 @@ export function useSpacetimeDB() {
           ]);
       });
 
-      // Hook up live dynamic updates
+      // Hook up live dynamic updates (real-time inserts/updates)
       conn.db.incident.onInsert((ctx, row) => {
          setIncidents(prev => ({ ...prev, [row.id]: row }));
       });
       conn.db.execution.onInsert((ctx, row) => {
-         setExecutions(prev => ({ ...prev, [row.incidentId]: row }));
+         setExecutions(prev => ({ ...prev, [row.id]: row }));
       });
       conn.db.ai_decision.onInsert((ctx, row) => {
-         setAiDecisions(prev => ({ ...prev, [row.incidentId]: row }));
+         setAiDecisions(prev => ({ ...prev, [row.incidentId ?? row.incident_id]: row }));
       });
       conn.db.safety_check.onInsert((ctx, row) => {
-         setSafetyChecks(prev => ({ ...prev, [row.incidentId]: row }));
+         setSafetyChecks(prev => ({ ...prev, [row.id]: row }));
       });
       conn.db.agent_event.onInsert((ctx, row) => {
          setAgentEvents(prev => ({ ...prev, [row.id]: row }));
@@ -98,16 +104,20 @@ export function useSpacetimeDB() {
          setProjects(prev => ({ ...prev, [row.id]: row }));
       });
       
-      // Handle updates if an incident resolves
+      // Handle updates
       conn.db.incident.onUpdate((ctx, oldRow, newRow) => {
          setIncidents(prev => ({ ...prev, [newRow.id]: newRow }));
       });
       conn.db.execution.onUpdate((ctx, oldRow, newRow) => {
-         setExecutions(prev => ({ ...prev, [newRow.incidentId]: newRow }));
+         setExecutions(prev => ({ ...prev, [newRow.id]: newRow }));
+      });
+      conn.db.ai_decision.onUpdate((ctx, oldRow, newRow) => {
+         setAiDecisions(prev => ({ ...prev, [newRow.incidentId ?? newRow.incident_id]: newRow }));
       });
 
       conn.onDisconnect(() => {
         setIsConnected(false);
+        connRef.current = null;
         console.log("Disconnected. Reconnecting...");
         setTimeout(connectToDB, 3000);
       });
@@ -117,23 +127,23 @@ export function useSpacetimeDB() {
 
     return () => {
       if (conn) conn.disconnect();
+      connRef.current = null;
     };
   }, []);
 
-  const createIncident = useCallback((projectId, service, logs) => {
-    reducers.createIncident(projectId, service, logs);
+  // ─── Reducer helpers ─────────────────────────────────────────────────────────
+  // All reducers are called on the live connection via connRef.current.reducers
+
+  const createIncident = useCallback((projectId, incidentId, service, logsSummary) => {
+    connRef.current?.reducers.createIncident(projectId, incidentId, service, logsSummary);
   }, []);
 
-  const startExecution = useCallback((incidentId) => {
-    reducers.startExecution(incidentId);
+  const createProject = useCallback((userId, djangoProjectId, name, description, sshKey, serverIp, rootDirectory, deployCommands) => {
+    connRef.current?.reducers.createProject(userId, djangoProjectId, name, description, sshKey, serverIp, rootDirectory, deployCommands);
   }, []);
 
-  const createProject = useCallback((userId, name, description, sshKey, serverIp, rootDirectory) => {
-    reducers.createProject(userId, name, description, sshKey, serverIp, rootDirectory);
-  }, []);
-
-  const resolveIncident = useCallback((incidentId) => {
-    reducers.resolveIncident(incidentId);
+  const resolveIncident = useCallback((projectId, incidentId) => {
+    connRef.current?.reducers.resolveIncident(projectId, incidentId);
   }, []);
 
   return {
@@ -147,7 +157,8 @@ export function useSpacetimeDB() {
     projects,
     createIncident,
     createProject,
-    startExecution,
     resolveIncident,
   };
 }
+
+

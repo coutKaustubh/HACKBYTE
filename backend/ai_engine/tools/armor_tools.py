@@ -1,9 +1,11 @@
 import os
 import httpx
+from pathlib import Path
 from models.intent import Intent, EnforcementResult
 from dotenv import load_dotenv
 
-load_dotenv()
+_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV)
 
 # ── Local policy definition ───────────────────────────────────────
 # These mirror what you configure on platform.armoriq.ai
@@ -11,27 +13,35 @@ POLICIES = {
     "safe": [
         "list_directory",
         "read_file",
+        "read_file_with_lines",
+        "grep_in_file",
+        "grep_in_project",
+        "inspect_db",
         "tail_logs",
         "grep_logs",
         "pm2_list",
         "npm_list",
-        "read_logs"
+        "read_logs",
     ],
     "controlled": [
         "pm2_start",
         "npm_install",
+        "install_modules",
+        "build_app",
         "file_edit",
         "restart_service",
         "edit_config",
         "rollback_deploy",
         "redeploy_app",
         "write_file",
+        "patch_code_file",
         "fix_import_path",
         "create_model_file",
         "rename_file",
         "kill_process",
         "fix_missing_module",
-        "install_dependency"
+        "install_dependency",
+        "db_query",
     ],
     "deny": [
         "drop_table",           # DEMO: always blocked

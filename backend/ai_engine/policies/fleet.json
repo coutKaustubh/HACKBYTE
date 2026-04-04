@@ -1,0 +1,12 @@
+[
+  {
+    "vm_id": "vultr-prod-01",
+    "label": "Primary Production VM",
+    "ip": "${VULTR_VM_IP}",
+    "user": "${VULTR_VM_USER}",
+    "ssh_key_path": "${VULTR_SSH_KEY_PATH}",
+    "project_root": "${PROJECT_ROOT}",
+    "public_url": "${PUBLIC_APP_URL}",
+    "enabled": true
+  }
+]
