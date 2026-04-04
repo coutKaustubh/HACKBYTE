@@ -1,0 +1,13 @@
+{
+  "_comment": "Service dependency graph. If a dependency is DOWN, dependent services suppress auto-fix attempts to avoid redundant agent runs.",
+  "dependencies": {
+    "nginx": ["backend", "nodejs"],
+    "backend": ["postgresql", "redis"],
+    "nodejs": ["postgresql", "redis"],
+    "sharad_vyas_portfolio": ["postgresql", "redis"],
+    "postgresql": [],
+    "redis": [],
+    "api_server": ["postgresql", "redis", "backend"]
+  },
+  "_note": "Key = service name in PM2 / systemd. Values = services it depends on. Empty list = no dependencies."
+}

@@ -1,14 +1,28 @@
+"""
+tools/vm_tools.py — High-level VM action methods over SSH.
+
+Low-level SSH plumbing (connect, run command, SFTP write) lives in ssh_utils.py.
+The action dispatch table lives in dispatch.py.
+This file only contains business-logic methods.
+"""
+
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from tools.ssh_utils import (
+    build_ssh_client,
+    run_ssh_command,
+    sftp_write,
+    resolve_remote_path,
+    SSHConnectionError,
+)
 
 _ENV = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV)
 
 
-class SSHNotConnectedError(RuntimeError):
-    """Raised when SSH is not available and no simulation fallback exists."""
-    pass
+# ── Backwards-compatible alias so existing code using SSHNotConnectedError works ──
+SSHNotConnectedError = SSHConnectionError
 
 
 class VMTools:
@@ -28,40 +42,21 @@ class VMTools:
             print("[VMTools] USE_SSH=false → running in MOCK mode (demo/local)")
             return
 
-        import paramiko
-        self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            self.client.connect(
-                hostname=os.getenv("VULTR_VM_IP"),
-                username=os.getenv("VULTR_VM_USER"),
-                key_filename=os.path.expanduser(
-                    os.getenv("VULTR_SSH_KEY_PATH", "~/.ssh/id_rsa")
-                ),
-            )
-        except Exception as e:
-            raise SSHNotConnectedError(
-                f"[VMTools] SSH connection to Vultr FAILED: {e}\n"
-                f"  Host: {os.getenv('VULTR_VM_IP')}\n"
-                f"  User: {os.getenv('VULTR_VM_USER')}\n"
-                f"  Key:  {os.getenv('VULTR_SSH_KEY_PATH')}\n"
-                "Fix your SSH credentials in .env and retry."
-            ) from e
+        self.client = build_ssh_client()
 
         base = os.getenv("PUBLIC_APP_URL", "")
         self.app_url = base.rstrip("/") if base else ""
         self.project_root = os.getenv("PROJECT_ROOT", "/root/app").rstrip("/")
         print(f"[VMTools] SSH connected → {os.getenv('VULTR_VM_IP')} | project: {self.project_root}")
 
+    # ── Raw SSH runner (used by CodeTools and collect_node) ───────────────────
+
     def _run(self, cmd: str) -> str:
         if self._mock:
             return self._mock_run(cmd)
         if self.client is None:
             raise SSHNotConnectedError("[VMTools] SSH client is not connected.")
-        _, stdout, stderr = self.client.exec_command(cmd)
-        out = stdout.read().decode().strip()
-        err = stderr.read().decode().strip()
-        return out if out else err
+        return run_ssh_command(self.client, cmd)
 
     def _mock_run(self, cmd: str) -> str:
         """Return simulated output so the agent can reason and plan without a real VM."""
@@ -126,26 +121,9 @@ class VMTools:
             return {"action": "write_file", "target": target_path, "status": "FAILED", "output": f"SFTP write failed: {e}"}
 
     def list_directory(self, target: str) -> dict:
-        import posixpath
-        target_path = posixpath.join(self.project_root, target) if not target.startswith("/") else target
-        out = self._run(f"ls -la {target_path} 2>&1")
-        return {"action": "list_directory", "target": target_path, "status": "SUCCESS", "output": out}
-
-    def rename_file(self, target: str, params: dict) -> dict:
-        import posixpath
-        target_path = posixpath.join(self.project_root, target) if not target.startswith("/") else target
-        new_path = params.get("new_path", target)
-        new_target = posixpath.join(self.project_root, new_path) if not new_path.startswith("/") else new_path
-        out = self._run(f"mv {target_path} {new_target} 2>&1")
-        return {"action": "rename_file", "target": target_path, "status": "SUCCESS", "output": f"Renamed to {new_target}"}
-
-    def kill_process(self, target: str) -> dict:
-        out = self._run(f"fuser -k {target}/tcp 2>&1 || lsof -ti:{target} | xargs kill -9 2>&1")
-        return {"action": "kill_process", "target": target, "status": "SUCCESS", "output": out}
-
-    def install_dependency(self, target: str) -> dict:
-        out = self._run(f"cd {self.project_root} && npm install {target} 2>&1")
-        return {"action": "install_dependency", "target": target, "status": "SUCCESS", "output": out}
+        path = resolve_remote_path(target, self.project_root)
+        out  = self._run(f"ls -la {path} 2>&1")
+        return {"action": "list_directory", "target": path, "status": "SUCCESS", "output": out}
 
     def check_service_status(self, service: str) -> str:
         return self._run(f"systemctl status {service} --no-pager 2>&1")
@@ -161,14 +139,14 @@ class VMTools:
                 app_status = f"App health unreachable: {e}"
 
         return {
-            "uptime": self._run("uptime"),
-            "memory": self._run("free -h"),
-            "disk": self._run("df -h"),
-            "top_processes": self._run("ps aux --sort=-%mem | head -15"),
-            "app_site_status": app_status,
-            "failed_services": self._run("systemctl --failed --no-pager"),
-            "recent_errors": self._run("journalctl -p err -n 50 --no-pager"),
-            "pm2_status": self._run("pm2 status --no-color 2>/dev/null"),
+            "uptime":           self._run("uptime"),
+            "memory":           self._run("free -h"),
+            "disk":             self._run("df -h"),
+            "top_processes":    self._run("ps aux --sort=-%mem | head -15"),
+            "app_site_status":  app_status,
+            "failed_services":  self._run("systemctl --failed --no-pager"),
+            "recent_errors":    self._run("journalctl -p err -n 50 --no-pager"),
+            "pm2_status":       self._run("pm2 status --no-color 2>/dev/null"),
         }
 
     def get_config_files(self) -> dict:
@@ -183,7 +161,40 @@ class VMTools:
                 result[name] = content
         return result
 
-    # ── ACTION TOOLS (only run if ArmorClaw approves) ────────────────
+    # ── FILE OPERATIONS ───────────────────────────────────────────────────────
+
+    def write_file(self, path: str, content: str) -> dict:
+        target = resolve_remote_path(path, self.project_root)
+        return sftp_write(self.client, target, content)
+
+    def rename_file(self, target: str, params: dict) -> dict:
+        src     = resolve_remote_path(target, self.project_root)
+        new_p   = params.get("new_path", target)
+        dst     = resolve_remote_path(new_p, self.project_root)
+        self._run(f"mv {src} {dst} 2>&1")
+        return {"action": "rename_file", "target": src, "status": "SUCCESS", "output": f"Renamed to {dst}"}
+
+    # ── ACTION TOOLS ──────────────────────────────────────────────────────────
+
+    def kill_process(self, target: str) -> dict:
+        out = self._run(f"fuser -k {target}/tcp 2>&1 || lsof -ti:{target} | xargs kill -9 2>&1")
+        return {"action": "kill_process", "target": target, "status": "SUCCESS", "output": out}
+
+    def install_dependency(self, target: str) -> dict:
+        out = self._run(f"cd {self.project_root} && npm install {target} 2>&1")
+        return {"action": "install_dependency", "target": target, "status": "SUCCESS", "output": out}
+
+    def install_modules(self, target: str = "") -> dict:
+        path = target if target.startswith("/") else self.project_root
+        out  = self._run(f"cd {path} && npm install 2>&1")
+        status = "FAILED" if "npm ERR!" in out or "error" in out.lower()[:200] else "SUCCESS"
+        return {"action": "install_modules", "target": path, "status": status, "output": out}
+
+    def build_app(self, target: str = "") -> dict:
+        path = target if target.startswith("/") else self.project_root
+        out  = self._run(f"cd {path} && npm run build 2>&1")
+        status = "FAILED" if "npm ERR!" in out or "Build error" in out else "SUCCESS"
+        return {"action": "build_app", "target": path, "status": status, "output": out}
 
     def restart_service(self, service: str) -> dict:
         out = self._run(f"pm2 restart {service} && pm2 save 2>&1")
@@ -210,15 +221,14 @@ class VMTools:
         }
 
     def edit_config(self, target: str, params: dict) -> dict:
-        import posixpath
-        target_path = posixpath.join(self.project_root, target) if not target.startswith("/") else target
+        path    = resolve_remote_path(target, self.project_root)
         changes = []
         for key, value in params.items():
-            self._run(f"sed -i 's|^{key}.*|{key} = {value}|' {target_path}")
+            self._run(f"sed -i 's|^{key}.*|{key} = {value}|' {path}")
             changes.append(f"{key} = {value}")
         return {
             "action": "edit_config",
-            "target": target_path,
+            "target": path,
             "status": "SUCCESS",
             "output": f"Updated: {', '.join(changes)}",
         }
@@ -237,26 +247,9 @@ class VMTools:
         out = self._run(f"cd {self.project_root} && git add . && git commit -m '{message}' 2>&1")
         return {"action": "redeploy_app", "target": self.project_root, "status": "SUCCESS", "output": out}
 
+    # ── DISPATCH (delegates to dispatch.py) ───────────────────────────────────
+
     def dispatch(self, action: str, target: str, params: dict) -> dict:
         """Single entry point — called by execute node after ArmorClaw approval."""
-        dispatch_map = {
-            "restart_service":   lambda: self.restart_service(target),
-            "pm2_start":         lambda: self.pm2_start(target, params),
-            "edit_config":       lambda: self.edit_config(target, params),
-            "fix_import_path":   lambda: self.edit_config(target, params),
-            "rollback_deploy":   lambda: self.rollback_deploy(target),
-            "redeploy_app":      lambda: self.redeploy_app(params.get("message", "AI Patch")),
-            "read_logs":         lambda: {"output": self.read_service_logs(target)},
-            "read_file":         lambda: {"output": self.read_file(target)},
-            "write_file":        lambda: self.write_file(target, params.get("content", "")),
-            "create_model_file": lambda: self.write_file(target, params.get("content", "")),
-            "list_directory":    lambda: self.list_directory(target),
-            "rename_file":       lambda: self.rename_file(target, params),
-            "kill_process":      lambda: self.kill_process(target),
-            "fix_missing_module": lambda: self.install_dependency(target),
-            "install_dependency": lambda: self.install_dependency(target),
-        }
-        fn = dispatch_map.get(action)
-        if not fn:
-            return {"status": "FAILED", "output": f"Unknown action: {action}"}
-        return fn()
+        from tools.dispatch import dispatch_action
+        return dispatch_action(self, action, target, params)

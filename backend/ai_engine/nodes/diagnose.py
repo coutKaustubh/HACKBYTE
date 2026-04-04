@@ -6,26 +6,26 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-gemini = GeminiTools()
-st = SpacetimeTools()
+gemini     = GeminiTools()
+dep_graph  = DependencyGraph()
+
+_CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.55"))
+
 
 def diagnose_node(state: dict) -> dict:
     incident_id = state["incident_id"]
     project_id  = state.get("project_id", 0)
 
-    # HEURISTIC: Skip LLM reasoning if it's a known simple case (saves time/tokens)
-    logs = state.get("raw_logs", "")
-    snapshot = str(state.get("system_snapshot", ""))
-    
-    pm2_logs_empty = len(logs.strip()) < 150 or "No process found" in logs
-    
-    # Check pm2_status from snapshot (injected by get_system_snapshot)
-    pm2_status = str(state.get("system_snapshot", {}).get("pm2_status", ""))
-    pm2_online = "online" in pm2_status.lower()
+    logs     = state.get("raw_logs", "")
+    snapshot = state.get("system_snapshot", {})
 
-    # If PM2 doesn't show the app as online AND no real app logs came in
-    # → safe to assume BOOT_FAILURE without relying on systemd markers
-    no_process_running = not pm2_online
+    # ── Wire incident_id into gemini so all calls are cost-attributed ──────────
+    gemini.incident_id = incident_id
+
+    # ── Fast-path heuristic (no Gemini needed) ─────────────────────────────────
+    pm2_logs_empty     = len(logs.strip()) < 150 or "No process found" in logs
+    pm2_status         = str(snapshot.get("pm2_status", ""))
+    no_process_running = "online" not in pm2_status.lower()
 
     if pm2_logs_empty and no_process_running:
         project_root = os.getenv("PROJECT_ROOT", "/root/app")
@@ -88,6 +88,10 @@ def diagnose_node(state: dict) -> dict:
         snapshot=state["system_snapshot"],
         on_token=lambda chunk: None  # collect silently — no per-word HTTP calls
     )
+    grounded_str = grounded_context_str(grounded)
+
+    # ── Full Gemini diagnosis ──────────────────────────────────────────────────
+    print(f"  🤖 [diagnose] Cache MISS — calling Gemini. (stats: {diagnosis_cache.stats()})")
 
     # Emit a single AGENT_THINKING event with the full reasoning
     st.emit("AGENT_THINKING", incident_id, {
@@ -98,10 +102,13 @@ def diagnose_node(state: dict) -> dict:
 
     # then get the structured diagnosis
     diagnosis = gemini.diagnose(
-        logs=state["raw_logs"],
-        snapshot=state["system_snapshot"],
-        configs=state["config_files"]
+        logs=logs,
+        snapshot=snapshot,
+        configs=state.get("config_files", {}),
+        project_tree=state.get("project_tree", ""),
+        grounded_context=grounded_str,
     )
+    diagnosis_cache.set(cache_key, diagnosis)
 
     # ── Emit: full diagnosis ready ─────────────────────────────────────
     # print("DIAGNOSIS_READY" , incident_id , {
