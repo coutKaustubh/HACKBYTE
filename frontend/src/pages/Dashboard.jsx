@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Navbar from '../components/Navbar'
 import ProjectCard from '../components/ProjectCard'
+import AddProjectModal from '../components/AddProjectModal'
 import { useNavigate } from 'react-router-dom'
 
 const DUMMY_PROJECTS = [
@@ -13,6 +14,7 @@ const DUMMY_PROJECTS = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -52,6 +54,7 @@ export default function Dashboard() {
             <p className="text-[#737373]">Here are your active projects.</p>
           </div>
           <button 
+            onClick={() => setIsModalOpen(true)}
             className="text-sm px-4 py-2 bg-[#171717] text-white font-medium rounded-lg shadow-md hover:bg-black transition-colors cursor-pointer flex items-center gap-2"
           >
             + Add Project
@@ -64,6 +67,15 @@ export default function Dashboard() {
           ))}
         </div>
       </main>
+
+      <AddProjectModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSubmit={(data) => {
+          console.log("New Project Data:", data);
+          // TODO: send form data to backend
+        }} 
+      />
     </div>
   )
 }
