@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
-import { Activity } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { Activity, Database } from 'lucide-react'
 
 export default function Navbar({ projectName, showLogout, onLogout }) {
   return (
@@ -9,7 +9,14 @@ export default function Navbar({ projectName, showLogout, onLogout }) {
         <span className="font-semibold text-[#171717]">XOne</span>
       </Link>
       
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-1 justify-end">
+        <Link 
+          to="/project-data" 
+          className="text-sm font-medium text-[#737373] hover:text-[#171717] flex items-center gap-2 mr-4"
+        >
+          <Database className="w-4 h-4" />
+          SQL Monitor
+        </Link>
         {projectName && (
           <div className="flex items-center gap-4 pr-2">
             <span className="text-[#737373] font-medium text-sm">{projectName}</span>
