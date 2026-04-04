@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import ProjectCard from '../components/ProjectCard'
 import { useNavigate } from 'react-router-dom'
@@ -12,9 +13,16 @@ const DUMMY_PROJECTS = [
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/');
+    }
+  }, [navigate]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/auth');
+    navigate('/');
   };
 
   return (
