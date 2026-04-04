@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-const mockData = {
-  incident: { id: 1, service: "nginx", status: "error", logs: "connection refused" },
-  ai_decision: { analysis: "memory issue", command: "restart service", confidence: 0.91 },
-  safety_check: { allowed: false, reason: "unsafe command" },
-  execution: { status: "failed", output: "restart failed" }
-};
-
-export default function Terminal() {
+export default function Terminal({ incident, aiDecision, safetyCheck, execution }) {
   const [logs, setLogs] = useState([])
   const bottomRef = useRef(null)
 
@@ -16,31 +9,56 @@ export default function Terminal() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
+  // Derive logs from real-time state transitions
   useEffect(() => {
-    let currentStep = 0;
-    
-    // Simulate real-time updates based on requirement
-    const steps = [
-      () => setLogs(prev => [...prev, { type: 'error', text: `[ALERT] ${mockData.incident.service} service failed` }]),
-      () => setLogs(prev => [...prev, { type: 'normal', text: `[AI] analyzing issue...` }]),
-      () => setLogs(prev => [...prev, { type: 'normal', text: `[AI] ${mockData.ai_decision.analysis} detected (confidence: ${mockData.ai_decision.confidence})` }]),
-      () => setLogs(prev => [...prev, { type: 'error', text: `[SAFE] BLOCKED 🚫 (${mockData.safety_check.reason})` }]),
-      () => setLogs(prev => [...prev, { type: 'normal', text: `[EXEC] running...` }]),
-      () => setLogs(prev => [...prev, { type: 'error', text: `[EXEC] ${mockData.execution.status} ❌` }]),
-      () => setLogs(prev => [...prev, { type: 'normal', text: `[SYSTEM] incident not resolved` }]),
-    ];
+    const computedLogs = [];
 
-    const timer = setInterval(() => {
-      if (currentStep < steps.length) {
-        steps[currentStep]();
-        currentStep++;
+    if (incident) {
+      computedLogs.push({ type: 'error', text: `[ALERT] ${incident.service} service reported failure` });
+      computedLogs.push({ type: 'normal', text: `[LOGS] ${incident.logs}` });
+      
+      if (!aiDecision) {
+        computedLogs.push({ type: 'normal', text: `[AI] analyzing issue...` });
       } else {
-        clearInterval(timer); // stop once all steps run
+        computedLogs.push({ type: 'normal', text: `[AI] Analysis complete: ${aiDecision.analysis} (Confidence: ${aiDecision.confidence})` });
+        
+        if (!safetyCheck) {
+          computedLogs.push({ type: 'normal', text: `[SAFE] validating proposed fix...` });
+        } else {
+          if (safetyCheck.allowed) {
+            computedLogs.push({ type: 'success', text: `[SAFE] APPROVED ✅ (${safetyCheck.reason})` });
+          } else {
+            computedLogs.push({ type: 'error', text: `[SAFE] BLOCKED 🚫 (${safetyCheck.reason})` });
+          }
+          
+          if (safetyCheck.allowed) {
+            if (!execution) {
+               computedLogs.push({ type: 'normal', text: `[SYSTEM] waiting for user execution...` });
+            } else {
+               computedLogs.push({ type: 'normal', text: `[EXEC] running...` });
+               if (execution.status === 'success') {
+                 computedLogs.push({ type: 'success', text: `[EXEC] SUCCESS ✅` });
+                 computedLogs.push({ type: 'normal', text: `[EXEC OUT] ${execution.output}` });
+               } else if (execution.status === 'failed') {
+                 computedLogs.push({ type: 'error', text: `[EXEC] FAILED ❌` });
+                 computedLogs.push({ type: 'error', text: `[EXEC OUT] ${execution.output}` });
+               }
+            }
+          }
+        }
       }
-    }, 1000); // 1 log per second
 
-    return () => clearInterval(timer);
-  }, []);
+      if (incident.status === 'resolved') {
+        computedLogs.push({ type: 'success', text: `[SYSTEM] status set to RESOLVED. System nominal.` });
+      } else if (incident.status === 'error') {
+        computedLogs.push({ type: 'error', text: `[SYSTEM] status set to ERROR. Operator attention required.` });
+      }
+    } else {
+       computedLogs.push({ type: 'normal', text: `[SYSTEM] Tail connected. Listening for incidents...` });
+    }
+
+    setLogs(computedLogs);
+  }, [incident, aiDecision, safetyCheck, execution]);
 
   return (
     <div className="bg-[#FFFFFF] border border-[#E5E5E5] h-full flex flex-col rounded-lg font-mono text-sm overflow-hidden shadow-lg">
@@ -50,7 +68,7 @@ export default function Terminal() {
         <div className="w-3 h-3 rounded-full border border-[#A3A3A3]/30"></div>
         <span className="ml-2 text-[#737373] text-xs">live_terminal // console</span>
       </div>
-      <div className="p-4 overflow-y-auto flex-1 space-y-1.5">
+      <div className="p-4 overflow-y-auto flex-1 space-y-1.5 transition-all">
         {logs.map((log, idx) => (
           <div 
             key={idx} 

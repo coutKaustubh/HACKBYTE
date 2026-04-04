@@ -48,7 +48,7 @@ export default function AddProjectModal({ isOpen, onClose, onSubmit }) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           <form id="add-project-form" onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -76,7 +76,7 @@ export default function AddProjectModal({ isOpen, onClose, onSubmit }) {
               <label className="block text-sm font-medium text-[#171717] mb-1.5">SSH Key</label>
               <textarea required name="sshKey" value={formData.sshKey} onChange={handleChange} rows="4" className="w-full px-3 py-2 border border-[#E5E5E5] rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-[#171717] transition-all bg-[#FAFAFA] font-mono text-xs placeholder:text-[#A3A3A3]" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----" />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-5">
               <div>
                 <label className="block text-sm font-medium text-[#171717] mb-1.5">Created At</label>
