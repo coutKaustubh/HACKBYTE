@@ -361,9 +361,17 @@ DB_PORT=5432
 
 ---
 
-## 📸 Screenshots
+## 📺 Demo & Screenshots
 
-> *Add screenshots of your Dashboard, Command Center terminal, Blockchain Verify modal, and Landing Page here.*
+Check out the full project walkthrough below:
+
+<div align="center">
+  <video src="./assets/demo.mp4" width="100%" controls></video>
+  <p><em>(If the video doesn't load, click <a href="./assets/demo.mp4">here</a> to view/download.)</em></p>
+</div>
+
+> [!NOTE]
+> The video above showcases the autonomous agent's full lifecycle: log collection, Gemini-powered diagnosis, SpacetimeDB real-time updates, and on-chain verification.
 
 ---
 
