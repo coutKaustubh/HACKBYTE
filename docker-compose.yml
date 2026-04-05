@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   spacetimedb:
-    image: clockworklabs/spacetimedb:latest
+    image: spacetimehub/portal:latest
     ports:
       - "3000:3000"
     volumes:
@@ -46,7 +46,7 @@ services:
       - DB_PORT=5432
       # Ensure your .env variables (like GEMINI_API_KEY) are loaded down here in reality
     env_file:
-      - .env
+      - ./backend/.env
     volumes:
       - ./backend:/app
       # Block the host virtual environment from overriding the container system dependencies
@@ -55,7 +55,6 @@ services:
     depends_on:
       - db
       - spacetimedb
-
   frontend:
     build:
       context: ./frontend

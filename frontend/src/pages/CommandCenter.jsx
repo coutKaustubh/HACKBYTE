@@ -17,6 +17,7 @@ export default function CommandCenter() {
   const [agentResult, setAgentResult]   = useState(null)
   const [agentError, setAgentError]     = useState(null)
   const [streamingLogs, setStreamingLogs] = useState([])
+  const [agentState, setAgentState] = useState(null)
 
   // Verify modal state
   const [verifyOpen, setVerifyOpen]     = useState(false)
@@ -139,6 +140,11 @@ export default function CommandCenter() {
               type: 'normal', 
               text: `[TOOL] Calling ${evt.name}...` 
             }]);
+          }
+
+          else if (evt.event === 'agent_state') {
+            console.log(`[AGENT STATE] after node "${evt.name}":`, evt.data);
+            setAgentState(evt.data);
           }
 
           else if (evt.event === 'done') {

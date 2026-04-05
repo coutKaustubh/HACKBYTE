@@ -111,6 +111,20 @@ async def stream_agent_events(initial_state: dict):
                     "data":  safe_keys,
                 }
 
+                # ── Send full agent state snapshot to frontend ────────────────
+                truncated_state = {}
+                for k, v in final_state.items():
+                    if isinstance(v, str) and len(v) > 300:
+                        truncated_state[k] = v[:300] + "..."
+                    else:
+                        truncated_state[k] = v
+                yield {
+                    "event": "agent_state",
+                    "name":  name,
+                    "label": NODE_LABELS.get(name, name),
+                    "data":  truncated_state,
+                }
+
             # ── LLM token streaming ───────────────────────────────────────────
             elif kind == "on_chat_model_stream":
                 chunk = data.get("chunk", {})
