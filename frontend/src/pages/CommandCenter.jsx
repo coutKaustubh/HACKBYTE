@@ -277,7 +277,7 @@ export default function CommandCenter() {
       <BlockchainVerifyModal
         isOpen={verifyOpen}
         onClose={() => setVerifyOpen(false)}
-        defaultTxHash={lastTxHash}
+        txHash={lastTxHash}
       />
     </div>
   )

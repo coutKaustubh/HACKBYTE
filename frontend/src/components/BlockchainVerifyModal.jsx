@@ -67,46 +67,31 @@ async function verifyTx(txHash) {
 }
 
 // ─── Modal Component ──────────────────────────────────────────────────────────
-export default function BlockchainVerifyModal({ isOpen, onClose, defaultTxHash = '' }) {
-  const [txHash, setTxHash]     = useState(defaultTxHash)
+export default function BlockchainVerifyModal({ isOpen, onClose, txHash }) {
   const [loading, setLoading]   = useState(false)
-  const [result, setResult]     = useState(null)   // verified result
+  const [result, setResult]     = useState(null)
   const [error, setError]       = useState(null)
 
-  // Auto-verify if a txHash is injected (e.g. from the audit log)
-  useEffect(() => {
-    if (isOpen && defaultTxHash && defaultTxHash !== txHash) {
-      setTxHash(defaultTxHash)
-    }
-  }, [isOpen, defaultTxHash])
-
-  // Reset state when closed
+  // Auto-verify the moment the modal opens with a valid txHash
   useEffect(() => {
     if (!isOpen) {
+      // Reset state when closed
       setResult(null)
       setError(null)
       setLoading(false)
-    }
-  }, [isOpen])
-
-  const handleVerify = async () => {
-    const hash = txHash.trim()
-    if (!hash.startsWith('0x') || hash.length !== 66) {
-      setError('Please enter a valid 66-character transaction hash starting with 0x.')
       return
     }
+    if (!txHash || !txHash.startsWith('0x') || txHash.length !== 66) return
+
+    // Fire immediately — no button press needed
     setLoading(true)
     setResult(null)
     setError(null)
-    try {
-      const data = await verifyTx(hash)
-      setResult(data)
-    } catch (err) {
-      setError(err.message || 'Verification failed.')
-    } finally {
-      setLoading(false)
-    }
-  }
+    verifyTx(txHash)
+      .then(setResult)
+      .catch((err) => setError(err.message || 'Verification failed.'))
+      .finally(() => setLoading(false))
+  }, [isOpen, txHash])
 
   if (!isOpen) return null
 
@@ -139,28 +124,13 @@ export default function BlockchainVerifyModal({ isOpen, onClose, defaultTxHash =
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
 
-          {/* TX Hash Input */}
-          <div>
-            <label className="block text-[11px] font-bold text-[#A3A3A3] uppercase tracking-widest mb-2">
-              Transaction Hash
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={txHash}
-                onChange={(e) => setTxHash(e.target.value)}
-                placeholder="0x..."
-                className="flex-1 px-3 py-2.5 rounded-xl border border-[#E5E5E5] text-xs font-mono text-[#171717] bg-[#FAFAFA] focus:outline-none focus:ring-2 focus:ring-[#171717]/10 focus:border-[#171717] transition-all"
-              />
-              <button
-                onClick={handleVerify}
-                disabled={loading || !txHash.trim()}
-                className="px-5 py-2.5 bg-[#171717] hover:bg-[#262626] disabled:bg-[#D4D4D4] text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shrink-0"
-              >
-                {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking...</> : 'Verify'}
-              </button>
+          {/* Auto-verifying — show TX hash being checked */}
+          {txHash && (
+            <div className="px-3 py-2 rounded-xl bg-[#F5F5F5] border border-[#E5E5E5]">
+              <p className="text-[10px] font-bold text-[#A3A3A3] uppercase tracking-widest mb-1">Checking Transaction</p>
+              <p className="text-[11px] font-mono text-[#525252] break-all">{txHash}</p>
             </div>
-          </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -248,15 +218,20 @@ export default function BlockchainVerifyModal({ isOpen, onClose, defaultTxHash =
             </div>
           )}
 
-          {/* Idle state hint */}
-          {!loading && !result && !error && (
-            <div className="text-center py-4">
-              <p className="text-xs text-[#A3A3A3]">
-                Paste a transaction hash above to verify the integrity of a patch audit record.
-              </p>
-              <p className="text-[10px] text-[#C3C3C3] mt-1">
-                TX hashes are logged to your browser console when a patch resolves.
-              </p>
+          {/* Loading spinner */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Loader2 className="w-8 h-8 text-[#171717] animate-spin" />
+              <p className="text-xs font-bold text-[#A3A3A3] uppercase tracking-widest">Querying Ethereum...</p>
+              <p className="text-[10px] text-[#C3C3C3]">Fetching on-chain record and IPFS payload</p>
+            </div>
+          )}
+
+          {/* No TX hash yet */}
+          {!loading && !result && !error && !txHash && (
+            <div className="text-center py-8">
+              <p className="text-xs text-[#A3A3A3]">No blockchain record available yet.</p>
+              <p className="text-[10px] text-[#C3C3C3] mt-1">A record is created automatically when an incident is resolved.</p>
             </div>
           )}
         </div>
